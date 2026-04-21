@@ -1,0 +1,84 @@
+# ============================================================================
+# experiment_config.yaml — Configuration centralisée des expériences
+# ============================================================================
+
+# ── Dataset ──
+dataset:
+  id: 100
+  name: "Dataset100_PARSE"
+  # Chemin vers les données PARSE brutes (structure: images/ labels/)
+  raw_dir: "/chemin/vers/PARSE"
+  # Proportion train/val/test
+  splits:
+    train: 0.70
+    val: 0.15
+    test: 0.15
+  seed: 42
+
+# ── nnU-Net training ──
+training:
+  # Configurations nnU-Net à entraîner (choisies après plan_and_preprocess)
+  configurations: ["3d_fullres"]
+  # Folds pour la cross-validation (0-4 pour complète, "all" pour tout)
+  folds: [0, 1, 2, 3, 4]
+  # Device (auto-détecté si non spécifié)
+  # device: "cuda"  # ou "mps" ou "cpu"
+
+# ── Dégradations ──
+degradations:
+  # Dégradation morphologique (érosion/dilatation)
+  morpho:
+    prob: 0.3
+    max_radius: 3
+  # Omission de composantes connexes
+  omission:
+    prob: 0.2
+    min_size: 150
+
+# ── Grid search ──
+grid_search:
+  # Phase 1 : morpho seule
+  morpho_grid:
+    prob: [0.1, 0.2, 0.3, 0.5]
+    max_radius: [1, 2, 3, 5]
+  # Phase 2 : omission seule
+  omission_grid:
+    prob: [0.1, 0.2, 0.3, 0.5]
+    min_size: [50, 100, 200, 500]
+  # Phase 3 : top-N combinaisons des phases 1 et 2
+  top_n_combos: 3
+  # Nombre d'époques réduit pour le grid search
+  num_epochs: 250
+  # Fold unique pour accélérer
+  fold: 0
+
+# ── Évaluation ──
+evaluation:
+  # Métriques à calculer
+  metrics: ["Dice", "HD95", "NSD"]
+  # Scénarios de cross-évaluation
+  scenarios:
+    - name: "GT_star"
+      description: "Évaluation sur GT propres"
+      degradation: null
+    - name: "GT_minus_mild"
+      description: "Évaluation sur GT légèrement dégradées"
+      degradation:
+        morpho: {prob: 1.0, max_radius: 2}
+    - name: "GT_minus_severe"
+      description: "Évaluation sur GT sévèrement dégradées"
+      degradation:
+        morpho: {prob: 1.0, max_radius: 5}
+        omission: {prob: 1.0, min_size: 200}
+
+# ── Hardware profiles ──
+hardware:
+  macos_mps:
+    vram_gb: 24
+    num_workers: 2
+    # nnU-Net ajuste auto mais on peut forcer un plan plus petit
+    device: "mps"
+  a40:
+    vram_gb: 35
+    num_workers: 4
+    device: "cuda"
