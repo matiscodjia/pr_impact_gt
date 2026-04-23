@@ -1,0 +1,216 @@
+
+╔══════════════════════════════════════════════════════════╗
+║  nnU-Net PARSE — Pipeline de segmentation               ║
+╠══════════════════════════════════════════════════════════╣
+║  Data:   ./data
+║  Device: mps (Apple Silicon)
+║  Debug:  false
+║  From:   convert
+╚══════════════════════════════════════════════════════════╝
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ▶ 1/9 — Conversion PARSE → format nnU-Net
+  2026-04-21 23:27:48
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Layout détecté : train/val/test subdirectories
+  train: 70 cas copiés
+  val: 15 cas copiés
+  test: 15 cas copiés dans imagesTs
+  test labels: 15 cas copiés dans labelsTs
+
+============================================================
+Dataset nnU-Net créé : /Users/matiscodjia/Dev/06_research/imagerie_medicale/pr_impact_gt/nnUNet_data/nnUNet_raw/Dataset100_PARSE
+  Cas d'entraînement : 85
+  dataset.json       : /Users/matiscodjia/Dev/06_research/imagerie_medicale/pr_impact_gt/nnUNet_data/nnUNet_raw/Dataset100_PARSE/dataset.json
+============================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ▶ 2/9 — Prétraitement nnU-Net
+  2026-04-21 23:27:53
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Fingerprint extraction...
+Dataset100_PARSE
+Using <class 'nnunetv2.imageio.simpleitk_reader_writer.SimpleITKIO'> reader/writer
+
+####################
+verify_dataset_integrity Done. 
+If you didn't see any error messages then your dataset is most likely OK!
+####################
+
+Experiment planning...
+
+############################
+INFO: You are using the old nnU-Net default planner. We have updated our recommendations. Please consider using those instead! Read more here: https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/resenc_presets.md
+############################
+
+Attempting to find 3d_lowres config. 
+Current spacing: [1.03      0.6759375 0.6759375]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [290.29126214 497.08737864 497.08737864]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.0609     0.69621563 0.69621563]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [281.83617683 482.60910548 482.60910548]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.092727   0.71710209 0.71710209]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [273.62735615 468.55252959 468.55252959]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.12550881 0.73861516 0.73861516]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [265.65762733 454.90536853 454.90536853]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.15927407 0.76077361 0.76077361]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [257.92002653 441.6556976  441.6556976 ]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.1940523  0.78359682 0.78359682]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [250.40779275 428.79193942 428.79193942]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.22987387 0.80710472 0.80710472]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [243.11436189 416.30285381 416.30285381]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.26677008 0.83131787 0.83131787]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [236.03336106 404.17752797 404.17752797]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.30477318 0.8562574  0.8562574 ]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [229.15860297 392.40536696 392.40536696]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.34391638 0.88194512 0.88194512]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [222.48408055 380.97608443 380.97608443]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.38423387 0.90840348 0.90840348]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [216.0039617  369.87969362 369.87969362]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.42576089 0.93565558 0.93565558]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [209.71258418 359.10649866 359.10649866]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.46853371 0.96372525 0.96372525]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [203.60445066 348.64708608 348.64708608]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.51258972 0.99263701 0.99263701]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [197.67422394 338.49231658 338.49231658]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.55796742 1.02241612 1.02241612]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [191.91672227 328.63331707 328.63331707]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.60470644 1.0530886  1.0530886 ]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [186.32691483 319.06147288 319.06147288]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.65284763 1.08468126 1.08468126]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [180.89991731 309.76842027 309.76842027]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.70243306 1.1172217  1.1172217 ]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [175.63098768 300.7460391  300.7460391 ]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.75350605 1.15073835 1.15073835]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [170.51552202 291.98644573 291.98644573]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.80611123 1.1852605  1.1852605 ]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [165.5490505  283.48198614 283.48198614]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.86029457 1.22081831 1.22081831]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [160.7272335  275.22522927 275.22522927]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.91610341 1.25744286 1.25744286]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [156.04585776 267.20896045 267.20896045]
+Attempting to find 3d_lowres config. 
+Current spacing: [1.97358651 1.29516615 1.29516615]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [151.50083278 259.4261752  259.4261752 ]
+Attempting to find 3d_lowres config. 
+Current spacing: [2.03279411 1.33402113 1.33402113]. 
+Current patch size: (np.int64(96), np.int64(160), np.int64(160)). 
+Current median shape: [147.08818717 251.87007301 251.87007301]
+2D U-Net configuration:
+{'data_identifier': 'nnUNetPlans_2d', 'preprocessor_name': 'DefaultPreprocessor', 'batch_size': 12, 'patch_size': (np.int64(512), np.int64(512)), 'median_image_size_in_voxels': array([512., 512.]), 'spacing': array([0.65625, 0.65625]), 'normalization_schemes': ['CTNormalization'], 'use_mask_for_norm': [False], 'resampling_fn_data': 'resample_data_or_seg_to_shape', 'resampling_fn_seg': 'resample_data_or_seg_to_shape', 'resampling_fn_data_kwargs': {'is_seg': False, 'order': 3, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_seg_kwargs': {'is_seg': True, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_probabilities': 'resample_data_or_seg_to_shape', 'resampling_fn_probabilities_kwargs': {'is_seg': False, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'architecture': {'network_class_name': 'dynamic_network_architectures.architectures.unet.PlainConvUNet', 'arch_kwargs': {'n_stages': 8, 'features_per_stage': (32, 64, 128, 256, 512, 512, 512, 512), 'conv_op': 'torch.nn.modules.conv.Conv2d', 'kernel_sizes': ((3, 3), (3, 3), (3, 3), (3, 3), (3, 3), (3, 3), (3, 3), (3, 3)), 'strides': ((1, 1), (2, 2), (2, 2), (2, 2), (2, 2), (2, 2), (2, 2), (2, 2)), 'n_conv_per_stage': (2, 2, 2, 2, 2, 2, 2, 2), 'n_conv_per_stage_decoder': (2, 2, 2, 2, 2, 2, 2), 'conv_bias': True, 'norm_op': 'torch.nn.modules.instancenorm.InstanceNorm2d', 'norm_op_kwargs': {'eps': 1e-05, 'affine': True}, 'dropout_op': None, 'dropout_op_kwargs': None, 'nonlin': 'torch.nn.LeakyReLU', 'nonlin_kwargs': {'inplace': True}}, '_kw_requires_import': ('conv_op', 'norm_op', 'dropout_op', 'nonlin')}, 'batch_dice': True}
+
+Using <class 'nnunetv2.imageio.simpleitk_reader_writer.SimpleITKIO'> reader/writer
+3D lowres U-Net configuration:
+{'data_identifier': 'nnUNetPlans_3d_lowres', 'preprocessor_name': 'DefaultPreprocessor', 'batch_size': 2, 'patch_size': (np.int64(96), np.int64(160), np.int64(160)), 'median_image_size_in_voxels': (147, 252, 252), 'spacing': array([2.03279411, 1.33402113, 1.33402113]), 'normalization_schemes': ['CTNormalization'], 'use_mask_for_norm': [False], 'resampling_fn_data': 'resample_data_or_seg_to_shape', 'resampling_fn_seg': 'resample_data_or_seg_to_shape', 'resampling_fn_data_kwargs': {'is_seg': False, 'order': 3, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_seg_kwargs': {'is_seg': True, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_probabilities': 'resample_data_or_seg_to_shape', 'resampling_fn_probabilities_kwargs': {'is_seg': False, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'architecture': {'network_class_name': 'dynamic_network_architectures.architectures.unet.PlainConvUNet', 'arch_kwargs': {'n_stages': 6, 'features_per_stage': (32, 64, 128, 256, 320, 320), 'conv_op': 'torch.nn.modules.conv.Conv3d', 'kernel_sizes': ((3, 3, 3), (3, 3, 3), (3, 3, 3), (3, 3, 3), (3, 3, 3), (3, 3, 3)), 'strides': ((1, 1, 1), (2, 2, 2), (2, 2, 2), (2, 2, 2), (2, 2, 2), (1, 2, 2)), 'n_conv_per_stage': (2, 2, 2, 2, 2, 2), 'n_conv_per_stage_decoder': (2, 2, 2, 2, 2), 'conv_bias': True, 'norm_op': 'torch.nn.modules.instancenorm.InstanceNorm3d', 'norm_op_kwargs': {'eps': 1e-05, 'affine': True}, 'dropout_op': None, 'dropout_op_kwargs': None, 'nonlin': 'torch.nn.LeakyReLU', 'nonlin_kwargs': {'inplace': True}}, '_kw_requires_import': ('conv_op', 'norm_op', 'dropout_op', 'nonlin')}, 'batch_dice': False, 'next_stage': '3d_cascade_fullres'}
+
+3D fullres U-Net configuration:
+{'data_identifier': 'nnUNetPlans_3d_fullres', 'preprocessor_name': 'DefaultPreprocessor', 'batch_size': 2, 'patch_size': (np.int64(96), np.int64(160), np.int64(160)), 'median_image_size_in_voxels': array([299., 512., 512.]), 'spacing': array([1.     , 0.65625, 0.65625]), 'normalization_schemes': ['CTNormalization'], 'use_mask_for_norm': [False], 'resampling_fn_data': 'resample_data_or_seg_to_shape', 'resampling_fn_seg': 'resample_data_or_seg_to_shape', 'resampling_fn_data_kwargs': {'is_seg': False, 'order': 3, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_seg_kwargs': {'is_seg': True, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_probabilities': 'resample_data_or_seg_to_shape', 'resampling_fn_probabilities_kwargs': {'is_seg': False, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'architecture': {'network_class_name': 'dynamic_network_architectures.architectures.unet.PlainConvUNet', 'arch_kwargs': {'n_stages': 6, 'features_per_stage': (32, 64, 128, 256, 320, 320), 'conv_op': 'torch.nn.modules.conv.Conv3d', 'kernel_sizes': ((3, 3, 3), (3, 3, 3), (3, 3, 3), (3, 3, 3), (3, 3, 3), (3, 3, 3)), 'strides': ((1, 1, 1), (2, 2, 2), (2, 2, 2), (2, 2, 2), (2, 2, 2), (1, 2, 2)), 'n_conv_per_stage': (2, 2, 2, 2, 2, 2), 'n_conv_per_stage_decoder': (2, 2, 2, 2, 2), 'conv_bias': True, 'norm_op': 'torch.nn.modules.instancenorm.InstanceNorm3d', 'norm_op_kwargs': {'eps': 1e-05, 'affine': True}, 'dropout_op': None, 'dropout_op_kwargs': None, 'nonlin': 'torch.nn.LeakyReLU', 'nonlin_kwargs': {'inplace': True}}, '_kw_requires_import': ('conv_op', 'norm_op', 'dropout_op', 'nonlin')}, 'batch_dice': True}
+
+Plans were saved to /Users/matiscodjia/Dev/06_research/imagerie_medicale/pr_impact_gt/nnUNet_data/nnUNet_preprocessed/Dataset100_PARSE/nnUNetPlans.json
+Preprocessing...
+Preprocessing dataset Dataset100_PARSE
+Configuration: 2d...
+{'data_identifier': 'nnUNetPlans_2d', 'preprocessor_name': 'DefaultPreprocessor', 'batch_size': 12, 'patch_size': [512, 512], 'median_image_size_in_voxels': [512.0, 512.0], 'spacing': [0.65625, 0.65625], 'normalization_schemes': ['CTNormalization'], 'use_mask_for_norm': [False], 'resampling_fn_data': 'resample_data_or_seg_to_shape', 'resampling_fn_seg': 'resample_data_or_seg_to_shape', 'resampling_fn_data_kwargs': {'is_seg': False, 'order': 3, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_seg_kwargs': {'is_seg': True, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_probabilities': 'resample_data_or_seg_to_shape', 'resampling_fn_probabilities_kwargs': {'is_seg': False, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'architecture': {'network_class_name': 'dynamic_network_architectures.architectures.unet.PlainConvUNet', 'arch_kwargs': {'n_stages': 8, 'features_per_stage': [32, 64, 128, 256, 512, 512, 512, 512], 'conv_op': 'torch.nn.modules.conv.Conv2d', 'kernel_sizes': [[3, 3], [3, 3], [3, 3], [3, 3], [3, 3], [3, 3], [3, 3], [3, 3]], 'strides': [[1, 1], [2, 2], [2, 2], [2, 2], [2, 2], [2, 2], [2, 2], [2, 2]], 'n_conv_per_stage': [2, 2, 2, 2, 2, 2, 2, 2], 'n_conv_per_stage_decoder': [2, 2, 2, 2, 2, 2, 2], 'conv_bias': True, 'norm_op': 'torch.nn.modules.instancenorm.InstanceNorm2d', 'norm_op_kwargs': {'eps': 1e-05, 'affine': True}, 'dropout_op': None, 'dropout_op_kwargs': None, 'nonlin': 'torch.nn.LeakyReLU', 'nonlin_kwargs': {'inplace': True}}, '_kw_requires_import': ['conv_op', 'norm_op', 'dropout_op', 'nonlin']}, 'batch_dice': True}
+Preprocessing cases:   0%|          | 0/85 [00:00<?, ?it/s]Preprocessing cases:   1%|          | 1/85 [00:06<08:33,  6.12s/it]Preprocessing cases:   2%|▏         | 2/85 [00:07<04:24,  3.19s/it]Preprocessing cases:   4%|▎         | 3/85 [00:25<13:36,  9.95s/it]Preprocessing cases:   5%|▍         | 4/85 [00:26<08:57,  6.64s/it]Preprocessing cases:   7%|▋         | 6/85 [00:29<04:53,  3.72s/it]Preprocessing cases:   8%|▊         | 7/85 [00:29<03:39,  2.81s/it]Preprocessing cases:   9%|▉         | 8/85 [00:30<03:00,  2.34s/it]Preprocessing cases:  11%|█         | 9/85 [00:31<02:18,  1.82s/it]Preprocessing cases:  12%|█▏        | 10/85 [00:32<01:56,  1.56s/it]Preprocessing cases:  13%|█▎        | 11/85 [00:51<08:28,  6.87s/it]Preprocessing cases:  14%|█▍        | 12/85 [00:52<06:15,  5.15s/it]Preprocessing cases:  15%|█▌        | 13/85 [00:55<05:13,  4.35s/it]Preprocessing cases:  16%|█▋        | 14/85 [00:55<03:52,  3.27s/it]Preprocessing cases:  18%|█▊        | 15/85 [00:58<03:29,  3.00s/it]Preprocessing cases:  19%|█▉        | 16/85 [01:03<04:16,  3.71s/it]Preprocessing cases:  20%|██        | 17/85 [01:05<03:41,  3.25s/it]Preprocessing cases:  21%|██        | 18/85 [01:15<05:45,  5.15s/it]Preprocessing cases:  22%|██▏       | 19/85 [01:20<05:31,  5.02s/it]Preprocessing cases:  24%|██▎       | 20/85 [01:21<04:16,  3.95s/it]Preprocessing cases:  25%|██▍       | 21/85 [01:24<04:00,  3.75s/it]Preprocessing cases:  27%|██▋       | 23/85 [01:25<02:06,  2.05s/it]Preprocessing cases:  28%|██▊       | 24/85 [01:27<02:11,  2.15s/it]Preprocessing cases:  29%|██▉       | 25/85 [01:34<03:30,  3.52s/it]Preprocessing cases:  31%|███       | 26/85 [01:50<06:49,  6.94s/it]Preprocessing cases:  32%|███▏      | 27/85 [01:54<05:45,  5.96s/it]Preprocessing cases:  33%|███▎      | 28/85 [01:55<04:14,  4.46s/it]Preprocessing cases:  34%|███▍      | 29/85 [01:55<02:59,  3.20s/it]Preprocessing cases:  35%|███▌      | 30/85 [01:57<02:36,  2.84s/it]Preprocessing cases:  36%|███▋      | 31/85 [01:57<01:52,  2.09s/it]Preprocessing cases:  38%|███▊      | 32/85 [02:04<03:06,  3.52s/it]Preprocessing cases:  39%|███▉      | 33/85 [02:13<04:23,  5.07s/it]Preprocessing cases:  40%|████      | 34/85 [02:18<04:21,  5.12s/it]Preprocessing cases:  41%|████      | 35/85 [02:24<04:25,  5.31s/it]Preprocessing cases:  42%|████▏     | 36/85 [02:26<03:40,  4.49s/it]Preprocessing cases:  44%|████▎     | 37/85 [02:27<02:44,  3.42s/it]Preprocessing cases:  45%|████▍     | 38/85 [02:30<02:29,  3.18s/it]Preprocessing cases:  46%|████▌     | 39/85 [02:33<02:26,  3.19s/it]Preprocessing cases:  47%|████▋     | 40/85 [02:36<02:26,  3.25s/it]Preprocessing cases:  48%|████▊     | 41/85 [02:44<03:19,  4.54s/it]Preprocessing cases:  49%|████▉     | 42/85 [02:47<02:56,  4.10s/it]Preprocessing cases:  51%|█████     | 43/85 [02:49<02:31,  3.61s/it]Preprocessing cases:  52%|█████▏    | 44/85 [02:50<01:52,  2.74s/it]Preprocessing cases:  53%|█████▎    | 45/85 [02:55<02:09,  3.23s/it]Preprocessing cases:  54%|█████▍    | 46/85 [02:56<01:50,  2.84s/it]Preprocessing cases:  55%|█████▌    | 47/85 [03:05<02:51,  4.51s/it]Preprocessing cases:  56%|█████▋    | 48/85 [03:15<03:44,  6.06s/it]Preprocessing cases:  58%|█████▊    | 49/85 [03:17<03:03,  5.11s/it]Preprocessing cases:  59%|█████▉    | 50/85 [03:18<02:09,  3.70s/it]Preprocessing cases:  60%|██████    | 51/85 [03:20<01:50,  3.24s/it]Preprocessing cases:  61%|██████    | 52/85 [03:29<02:45,  5.01s/it]Preprocessing cases:  62%|██████▏   | 53/85 [03:31<02:11,  4.10s/it]Preprocessing cases:  64%|██████▎   | 54/85 [03:34<01:58,  3.83s/it]Preprocessing cases:  65%|██████▍   | 55/85 [03:37<01:47,  3.58s/it]Preprocessing cases:  66%|██████▌   | 56/85 [03:43<02:01,  4.17s/it]Preprocessing cases:  67%|██████▋   | 57/85 [03:47<01:59,  4.28s/it]Preprocessing cases:  68%|██████▊   | 58/85 [03:54<02:17,  5.08s/it]Preprocessing cases:  69%|██████▉   | 59/85 [03:56<01:42,  3.96s/it]Preprocessing cases:  71%|███████   | 60/85 [03:58<01:28,  3.55s/it]Preprocessing cases:  73%|███████▎  | 62/85 [04:17<02:21,  6.14s/it]Preprocessing cases:  74%|███████▍  | 63/85 [04:18<01:47,  4.87s/it]Preprocessing cases:  75%|███████▌  | 64/85 [04:27<02:07,  6.09s/it]Preprocessing cases:  76%|███████▋  | 65/85 [04:31<01:47,  5.36s/it]Preprocessing cases:  78%|███████▊  | 66/85 [04:32<01:19,  4.21s/it]Preprocessing cases:  79%|███████▉  | 67/85 [04:34<01:06,  3.71s/it]Preprocessing cases:  80%|████████  | 68/85 [04:39<01:07,  3.98s/it]Preprocessing cases:  81%|████████  | 69/85 [04:41<00:54,  3.43s/it]Preprocessing cases:  82%|████████▏ | 70/85 [04:45<00:52,  3.51s/it]Preprocessing cases:  84%|████████▎ | 71/85 [04:54<01:11,  5.09s/it]Preprocessing cases:  85%|████████▍ | 72/85 [04:57<00:58,  4.51s/it]Preprocessing cases:  86%|████████▌ | 73/85 [04:59<00:47,  3.92s/it]Preprocessing cases:  87%|████████▋ | 74/85 [05:00<00:33,  3.02s/it]Preprocessing cases:  88%|████████▊ | 75/85 [05:02<00:28,  2.81s/it]Preprocessing cases:  89%|████████▉ | 76/85 [05:06<00:26,  2.97s/it]Preprocessing cases:  91%|█████████ | 77/85 [05:10<00:26,  3.28s/it]Preprocessing cases:  92%|█████████▏| 78/85 [05:20<00:38,  5.47s/it]Preprocessing cases:  93%|█████████▎| 79/85 [05:27<00:34,  5.75s/it]Preprocessing cases:  94%|█████████▍| 80/85 [05:31<00:26,  5.36s/it]Preprocessing cases:  95%|█████████▌| 81/85 [05:36<00:21,  5.27s/it]Preprocessing cases:  96%|█████████▋| 82/85 [05:37<00:11,  3.95s/it]Preprocessing cases:  98%|█████████▊| 83/85 [05:38<00:06,  3.05s/it]Preprocessing cases:  99%|█████████▉| 84/85 [05:39<00:02,  2.47s/it]Preprocessing cases: 100%|██████████| 85/85 [05:49<00:00,  4.62s/it]Preprocessing cases: 100%|██████████| 85/85 [05:49<00:00,  4.11s/it]
+Configuration: 3d_fullres...
+{'data_identifier': 'nnUNetPlans_3d_fullres', 'preprocessor_name': 'DefaultPreprocessor', 'batch_size': 2, 'patch_size': [96, 160, 160], 'median_image_size_in_voxels': [299.0, 512.0, 512.0], 'spacing': [1.0, 0.65625, 0.65625], 'normalization_schemes': ['CTNormalization'], 'use_mask_for_norm': [False], 'resampling_fn_data': 'resample_data_or_seg_to_shape', 'resampling_fn_seg': 'resample_data_or_seg_to_shape', 'resampling_fn_data_kwargs': {'is_seg': False, 'order': 3, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_seg_kwargs': {'is_seg': True, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_probabilities': 'resample_data_or_seg_to_shape', 'resampling_fn_probabilities_kwargs': {'is_seg': False, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'architecture': {'network_class_name': 'dynamic_network_architectures.architectures.unet.PlainConvUNet', 'arch_kwargs': {'n_stages': 6, 'features_per_stage': [32, 64, 128, 256, 320, 320], 'conv_op': 'torch.nn.modules.conv.Conv3d', 'kernel_sizes': [[3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]], 'strides': [[1, 1, 1], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2], [1, 2, 2]], 'n_conv_per_stage': [2, 2, 2, 2, 2, 2], 'n_conv_per_stage_decoder': [2, 2, 2, 2, 2], 'conv_bias': True, 'norm_op': 'torch.nn.modules.instancenorm.InstanceNorm3d', 'norm_op_kwargs': {'eps': 1e-05, 'affine': True}, 'dropout_op': None, 'dropout_op_kwargs': None, 'nonlin': 'torch.nn.LeakyReLU', 'nonlin_kwargs': {'inplace': True}}, '_kw_requires_import': ['conv_op', 'norm_op', 'dropout_op', 'nonlin']}, 'batch_dice': True}
+Preprocessing cases:   0%|          | 0/85 [00:00<?, ?it/s]Preprocessing cases:   1%|          | 1/85 [00:04<06:54,  4.94s/it]Preprocessing cases:   2%|▏         | 2/85 [00:17<12:53,  9.32s/it]Preprocessing cases:   4%|▎         | 3/85 [00:21<09:22,  6.86s/it]Preprocessing cases:   5%|▍         | 4/85 [00:22<06:10,  4.57s/it]Preprocessing cases:   6%|▌         | 5/85 [00:23<04:30,  3.39s/it]Preprocessing cases:   7%|▋         | 6/85 [00:28<05:10,  3.93s/it]Preprocessing cases:   8%|▊         | 7/85 [00:40<08:41,  6.68s/it]Preprocessing cases:   9%|▉         | 8/85 [00:41<06:14,  4.87s/it]Preprocessing cases:  11%|█         | 9/85 [00:43<05:03,  3.99s/it]Preprocessing cases:  12%|█▏        | 10/85 [00:46<04:31,  3.63s/it]Preprocessing cases:  13%|█▎        | 11/85 [01:01<08:45,  7.11s/it]Preprocessing cases:  15%|█▌        | 13/85 [01:05<05:41,  4.75s/it]Preprocessing cases:  16%|█▋        | 14/85 [01:06<04:28,  3.78s/it]Preprocessing cases:  18%|█▊        | 15/85 [01:20<07:28,  6.40s/it]Preprocessing cases:  19%|█▉        | 16/85 [01:26<07:16,  6.33s/it]Preprocessing cases:  20%|██        | 17/85 [01:27<05:32,  4.89s/it]Preprocessing cases:  21%|██        | 18/85 [01:38<07:14,  6.48s/it]Preprocessing cases:  22%|██▏       | 19/85 [01:46<07:39,  6.95s/it]Preprocessing cases:  24%|██▎       | 20/85 [01:47<05:48,  5.35s/it]Preprocessing cases:  25%|██▍       | 21/85 [01:49<04:36,  4.32s/it]Preprocessing cases:  26%|██▌       | 22/85 [01:59<06:16,  5.98s/it]Preprocessing cases:  27%|██▋       | 23/85 [02:04<05:47,  5.61s/it]Preprocessing cases:  28%|██▊       | 24/85 [02:08<05:09,  5.07s/it]Preprocessing cases:  29%|██▉       | 25/85 [02:11<04:25,  4.43s/it]Preprocessing cases:  31%|███       | 26/85 [02:26<07:28,  7.60s/it]Preprocessing cases:  32%|███▏      | 27/85 [02:27<05:38,  5.84s/it]Preprocessing cases:  33%|███▎      | 28/85 [02:32<05:09,  5.43s/it]Preprocessing cases:  34%|███▍      | 29/85 [02:35<04:25,  4.74s/it]Preprocessing cases:  35%|███▌      | 30/85 [02:51<07:25,  8.09s/it]Preprocessing cases:  36%|███▋      | 31/85 [02:55<06:15,  6.96s/it]Preprocessing cases:  38%|███▊      | 32/85 [03:04<06:34,  7.44s/it]Preprocessing cases:  39%|███▉      | 33/85 [03:09<05:58,  6.90s/it]Preprocessing cases:  40%|████      | 34/85 [03:18<06:12,  7.31s/it]Preprocessing cases:  41%|████      | 35/85 [03:19<04:30,  5.41s/it]Preprocessing cases:  42%|████▏     | 36/85 [03:22<03:53,  4.76s/it]Preprocessing cases:  44%|████▎     | 37/85 [03:29<04:26,  5.55s/it]Preprocessing cases:  45%|████▍     | 38/85 [03:38<05:07,  6.54s/it]Preprocessing cases:  46%|████▌     | 39/85 [03:42<04:24,  5.75s/it]Preprocessing cases:  47%|████▋     | 40/85 [03:45<03:46,  5.04s/it]Preprocessing cases:  48%|████▊     | 41/85 [03:54<04:23,  5.98s/it]Preprocessing cases:  49%|████▉     | 42/85 [04:00<04:21,  6.07s/it]Preprocessing cases:  51%|█████     | 43/85 [04:04<03:45,  5.36s/it]Preprocessing cases:  52%|█████▏    | 44/85 [04:04<02:40,  3.92s/it]Preprocessing cases:  53%|█████▎    | 45/85 [04:15<04:00,  6.01s/it]Preprocessing cases:  54%|█████▍    | 46/85 [04:20<03:41,  5.67s/it]Preprocessing cases:  55%|█████▌    | 47/85 [04:27<03:48,  6.01s/it]Preprocessing cases:  56%|█████▋    | 48/85 [04:39<04:57,  8.03s/it]Preprocessing cases:  59%|█████▉    | 50/85 [04:48<03:38,  6.24s/it]Preprocessing cases:  60%|██████    | 51/85 [04:52<03:16,  5.78s/it]Preprocessing cases:  61%|██████    | 52/85 [05:04<04:01,  7.33s/it]Preprocessing cases:  62%|██████▏   | 53/85 [05:08<03:28,  6.51s/it]Preprocessing cases:  64%|██████▎   | 54/85 [05:17<03:40,  7.11s/it]Preprocessing cases:  65%|██████▍   | 55/85 [05:17<02:34,  5.14s/it]Preprocessing cases:  66%|██████▌   | 56/85 [05:27<03:05,  6.41s/it]Preprocessing cases:  67%|██████▋   | 57/85 [05:37<03:32,  7.59s/it]Preprocessing cases:  68%|██████▊   | 58/85 [05:37<02:27,  5.48s/it]Preprocessing cases:  69%|██████▉   | 59/85 [05:43<02:22,  5.49s/it]Preprocessing cases:  71%|███████   | 60/85 [05:49<02:21,  5.64s/it]Preprocessing cases:  72%|███████▏  | 61/85 [05:59<02:46,  6.95s/it]Preprocessing cases:  73%|███████▎  | 62/85 [06:14<03:36,  9.41s/it]Preprocessing cases:  74%|███████▍  | 63/85 [06:17<02:45,  7.52s/it]Preprocessing cases:  75%|███████▌  | 64/85 [06:25<02:40,  7.62s/it]Preprocessing cases:  76%|███████▋  | 65/85 [06:28<02:01,  6.05s/it]Preprocessing cases:  78%|███████▊  | 66/85 [06:46<03:08,  9.91s/it]Preprocessing cases:  79%|███████▉  | 67/85 [06:50<02:22,  7.94s/it]Preprocessing cases:  80%|████████  | 68/85 [06:51<01:39,  5.85s/it]Preprocessing cases:  81%|████████  | 69/85 [07:00<01:49,  6.87s/it]Preprocessing cases:  82%|████████▏ | 70/85 [07:10<01:56,  7.80s/it]Preprocessing cases:  84%|████████▎ | 71/85 [07:12<01:23,  5.97s/it]Preprocessing cases:  85%|████████▍ | 72/85 [07:16<01:10,  5.41s/it]Preprocessing cases:  86%|████████▌ | 73/85 [07:23<01:09,  5.82s/it]Preprocessing cases:  87%|████████▋ | 74/85 [07:33<01:18,  7.11s/it]Preprocessing cases:  88%|████████▊ | 75/85 [07:35<00:56,  5.65s/it]Preprocessing cases:  89%|████████▉ | 76/85 [07:37<00:40,  4.46s/it]Preprocessing cases:  91%|█████████ | 77/85 [07:45<00:45,  5.63s/it]Preprocessing cases:  92%|█████████▏| 78/85 [07:58<00:55,  7.96s/it]Preprocessing cases:  93%|█████████▎| 79/85 [08:01<00:38,  6.37s/it]Preprocessing cases:  94%|█████████▍| 80/85 [08:09<00:34,  6.96s/it]Preprocessing cases:  95%|█████████▌| 81/85 [08:11<00:21,  5.36s/it]Preprocessing cases:  96%|█████████▋| 82/85 [08:32<00:30, 10.04s/it]Preprocessing cases:  98%|█████████▊| 83/85 [08:32<00:14,  7.16s/it]Preprocessing cases:  99%|█████████▉| 84/85 [08:35<00:05,  5.86s/it]Preprocessing cases: 100%|██████████| 85/85 [08:47<00:00,  7.55s/it]Preprocessing cases: 100%|██████████| 85/85 [08:47<00:00,  6.20s/it]
+Configuration: 3d_lowres...
+{'data_identifier': 'nnUNetPlans_3d_lowres', 'preprocessor_name': 'DefaultPreprocessor', 'batch_size': 2, 'patch_size': [96, 160, 160], 'median_image_size_in_voxels': [147, 252, 252], 'spacing': [2.0327941064604045, 1.33402113236464, 1.33402113236464], 'normalization_schemes': ['CTNormalization'], 'use_mask_for_norm': [False], 'resampling_fn_data': 'resample_data_or_seg_to_shape', 'resampling_fn_seg': 'resample_data_or_seg_to_shape', 'resampling_fn_data_kwargs': {'is_seg': False, 'order': 3, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_seg_kwargs': {'is_seg': True, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_probabilities': 'resample_data_or_seg_to_shape', 'resampling_fn_probabilities_kwargs': {'is_seg': False, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'architecture': {'network_class_name': 'dynamic_network_architectures.architectures.unet.PlainConvUNet', 'arch_kwargs': {'n_stages': 6, 'features_per_stage': [32, 64, 128, 256, 320, 320], 'conv_op': 'torch.nn.modules.conv.Conv3d', 'kernel_sizes': [[3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]], 'strides': [[1, 1, 1], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2], [1, 2, 2]], 'n_conv_per_stage': [2, 2, 2, 2, 2, 2], 'n_conv_per_stage_decoder': [2, 2, 2, 2, 2], 'conv_bias': True, 'norm_op': 'torch.nn.modules.instancenorm.InstanceNorm3d', 'norm_op_kwargs': {'eps': 1e-05, 'affine': True}, 'dropout_op': None, 'dropout_op_kwargs': None, 'nonlin': 'torch.nn.LeakyReLU', 'nonlin_kwargs': {'inplace': True}}, '_kw_requires_import': ['conv_op', 'norm_op', 'dropout_op', 'nonlin']}, 'batch_dice': False, 'next_stage': '3d_cascade_fullres'}
+Preprocessing cases:   0%|          | 0/85 [00:00<?, ?it/s]Preprocessing cases:   1%|          | 1/85 [00:09<13:20,  9.54s/it]Preprocessing cases:   2%|▏         | 2/85 [00:10<06:21,  4.60s/it]Preprocessing cases:   4%|▎         | 3/85 [00:12<04:30,  3.30s/it]Preprocessing cases:   5%|▍         | 4/85 [00:13<03:11,  2.37s/it]Preprocessing cases:   6%|▌         | 5/85 [00:13<02:03,  1.55s/it]Preprocessing cases:   7%|▋         | 6/85 [00:13<01:23,  1.06s/it]Preprocessing cases:   8%|▊         | 7/85 [00:14<01:08,  1.13it/s]Preprocessing cases:   9%|▉         | 8/85 [00:14<00:59,  1.30it/s]Preprocessing cases:  11%|█         | 9/85 [00:23<04:02,  3.19s/it]Preprocessing cases:  12%|█▏        | 10/85 [00:24<03:07,  2.50s/it]Preprocessing cases:  13%|█▎        | 11/85 [00:24<02:13,  1.80s/it]Preprocessing cases:  14%|█▍        | 12/85 [00:25<01:57,  1.60s/it]Preprocessing cases:  15%|█▌        | 13/85 [00:26<01:49,  1.52s/it]Preprocessing cases:  16%|█▋        | 14/85 [00:29<02:04,  1.75s/it]Preprocessing cases:  18%|█▊        | 15/85 [00:30<01:59,  1.70s/it]Preprocessing cases:  19%|█▉        | 16/85 [00:31<01:35,  1.38s/it]Preprocessing cases:  20%|██        | 17/85 [00:35<02:41,  2.38s/it]Preprocessing cases:  21%|██        | 18/85 [00:41<03:45,  3.36s/it]Preprocessing cases:  22%|██▏       | 19/85 [00:42<02:49,  2.57s/it]Preprocessing cases:  24%|██▎       | 20/85 [00:44<02:29,  2.29s/it]Preprocessing cases:  25%|██▍       | 21/85 [00:44<01:44,  1.64s/it]Preprocessing cases:  26%|██▌       | 22/85 [00:44<01:18,  1.24s/it]Preprocessing cases:  27%|██▋       | 23/85 [00:45<01:17,  1.24s/it]Preprocessing cases:  28%|██▊       | 24/85 [00:51<02:30,  2.47s/it]Preprocessing cases:  29%|██▉       | 25/85 [00:53<02:31,  2.53s/it]Preprocessing cases:  31%|███       | 26/85 [00:55<02:14,  2.27s/it]Preprocessing cases:  32%|███▏      | 27/85 [00:57<02:01,  2.09s/it]Preprocessing cases:  33%|███▎      | 28/85 [00:57<01:34,  1.66s/it]Preprocessing cases:  34%|███▍      | 29/85 [01:03<02:41,  2.88s/it]Preprocessing cases:  35%|███▌      | 30/85 [01:03<01:57,  2.14s/it]Preprocessing cases:  36%|███▋      | 31/85 [01:04<01:32,  1.72s/it]Preprocessing cases:  38%|███▊      | 32/85 [01:04<01:05,  1.23s/it]Preprocessing cases:  39%|███▉      | 33/85 [01:12<02:45,  3.18s/it]Preprocessing cases:  40%|████      | 34/85 [01:12<01:56,  2.29s/it]Preprocessing cases:  42%|████▏     | 36/85 [01:13<01:13,  1.50s/it]Preprocessing cases:  44%|████▎     | 37/85 [01:15<01:11,  1.50s/it]Preprocessing cases:  45%|████▍     | 38/85 [01:15<00:54,  1.16s/it]Preprocessing cases:  46%|████▌     | 39/85 [01:20<01:45,  2.28s/it]Preprocessing cases:  47%|████▋     | 40/85 [01:21<01:28,  1.97s/it]Preprocessing cases:  48%|████▊     | 41/85 [01:24<01:30,  2.06s/it]Preprocessing cases:  49%|████▉     | 42/85 [01:25<01:18,  1.82s/it]Preprocessing cases:  51%|█████     | 43/85 [01:27<01:23,  1.98s/it]Preprocessing cases:  52%|█████▏    | 44/85 [01:30<01:27,  2.13s/it]Preprocessing cases:  53%|█████▎    | 45/85 [01:30<01:01,  1.53s/it]Preprocessing cases:  54%|█████▍    | 46/85 [01:32<01:07,  1.72s/it]Preprocessing cases:  55%|█████▌    | 47/85 [01:34<01:09,  1.83s/it]Preprocessing cases:  56%|█████▋    | 48/85 [01:37<01:23,  2.24s/it]Preprocessing cases:  58%|█████▊    | 49/85 [01:38<01:02,  1.73s/it]Preprocessing cases:  59%|█████▉    | 50/85 [01:42<01:26,  2.48s/it]Preprocessing cases:  60%|██████    | 51/85 [01:43<01:05,  1.93s/it]Preprocessing cases:  61%|██████    | 52/85 [01:43<00:47,  1.44s/it]Preprocessing cases:  62%|██████▏   | 53/85 [01:44<00:40,  1.26s/it]Preprocessing cases:  64%|██████▎   | 54/85 [01:51<01:31,  2.96s/it]Preprocessing cases:  65%|██████▍   | 55/85 [01:51<01:07,  2.23s/it]Preprocessing cases:  66%|██████▌   | 56/85 [01:53<00:57,  2.00s/it]Preprocessing cases:  67%|██████▋   | 57/85 [01:54<00:46,  1.65s/it]Preprocessing cases:  68%|██████▊   | 58/85 [01:57<01:00,  2.24s/it]Preprocessing cases:  69%|██████▉   | 59/85 [01:59<00:57,  2.22s/it]Preprocessing cases:  71%|███████   | 60/85 [02:00<00:41,  1.65s/it]Preprocessing cases:  72%|███████▏  | 61/85 [02:01<00:36,  1.52s/it]Preprocessing cases:  73%|███████▎  | 62/85 [02:08<01:16,  3.31s/it]Preprocessing cases:  74%|███████▍  | 63/85 [02:10<01:03,  2.88s/it]Preprocessing cases:  75%|███████▌  | 64/85 [02:11<00:46,  2.20s/it]Preprocessing cases:  76%|███████▋  | 65/85 [02:13<00:43,  2.18s/it]Preprocessing cases:  78%|███████▊  | 66/85 [02:14<00:32,  1.71s/it]Preprocessing cases:  79%|███████▉  | 67/85 [02:14<00:23,  1.29s/it]Preprocessing cases:  80%|████████  | 68/85 [02:17<00:31,  1.86s/it]Preprocessing cases:  81%|████████  | 69/85 [02:18<00:25,  1.62s/it]Preprocessing cases:  82%|████████▏ | 70/85 [02:23<00:37,  2.52s/it]Preprocessing cases:  84%|████████▎ | 71/85 [02:24<00:27,  1.99s/it]Preprocessing cases:  85%|████████▍ | 72/85 [02:27<00:30,  2.32s/it]Preprocessing cases:  86%|████████▌ | 73/85 [02:27<00:20,  1.69s/it]Preprocessing cases:  88%|████████▊ | 75/85 [02:28<00:11,  1.19s/it]Preprocessing cases:  89%|████████▉ | 76/85 [02:32<00:16,  1.87s/it]Preprocessing cases:  91%|█████████ | 77/85 [02:34<00:15,  1.95s/it]Preprocessing cases:  92%|█████████▏| 78/85 [02:39<00:19,  2.81s/it]Preprocessing cases:  93%|█████████▎| 79/85 [02:41<00:14,  2.47s/it]Preprocessing cases:  94%|█████████▍| 80/85 [02:44<00:13,  2.64s/it]Preprocessing cases:  95%|█████████▌| 81/85 [02:44<00:07,  1.93s/it]Preprocessing cases:  96%|█████████▋| 82/85 [02:44<00:04,  1.43s/it]Preprocessing cases:  98%|█████████▊| 83/85 [02:45<00:02,  1.07s/it]Preprocessing cases:  99%|█████████▉| 84/85 [02:45<00:00,  1.28it/s]Preprocessing cases: 100%|██████████| 85/85 [02:47<00:00,  1.14s/it]Preprocessing cases: 100%|██████████| 85/85 [02:47<00:00,  1.97s/it]
+
+Plans générés. Vérifiez les fichiers dans :
+  /Users/matiscodjia/Dev/06_research/imagerie_medicale/pr_impact_gt/nnUNet_data/nnUNet_preprocessed/Dataset100_PARSE/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ▶ 3/9 — Génération des labels dégradés (GT-)
+  2026-04-21 23:46:07
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[GT_star] Pas de dégradation (GT*) — skip
+
+[GT_minus_mild] Génération des labels dégradés...
+Dégradation de 15 labels...
+  morpho: prob=1.0, max_radius=2
+  omission: prob=0.0, min_size=100
+  seed: 42
+  -> 15 labels dégradés sauvegardés dans /Users/matiscodjia/Dev/06_research/imagerie_medicale/pr_impact_gt/nnUNet_data/nnUNet_raw/Dataset100_PARSE/labelsTs_GT_minus_mild
+
+[GT_minus_severe] Génération des labels dégradés...
+Dégradation de 15 labels...
+  morpho: prob=1.0, max_radius=5
+  omission: prob=1.0, min_size=200
+  seed: 42
+  -> 15 labels dégradés sauvegardés dans /Users/matiscodjia/Dev/06_research/imagerie_medicale/pr_impact_gt/nnUNet_data/nnUNet_raw/Dataset100_PARSE/labelsTs_GT_minus_severe
+
+Génération terminée.
+Mise à jour du custom trainer...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ▶ 4/9 — Entraînement Model_Star (nnUNetTrainer)
+  2026-04-21 23:47:03
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── Fold 0/4 ──
+
+############################
+INFO: You are using the old nnU-Net default plans. We have updated our recommendations. Please consider using those instead! Read more here: https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/resenc_presets.md
+############################
+
+Using device: mps
+
+#######################################################################
+Please cite the following paper when using nnU-Net:
+Isensee, F., Jaeger, P. F., Kohl, S. A., Petersen, J., & Maier-Hein, K. H. (2021). nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation. Nature methods, 18(2), 203-211.
+#######################################################################
+
+2026-04-21 23:47:06.073917: do_dummy_2d_data_aug: False
+2026-04-21 23:47:06.074329: Using splits from existing split file: /Users/matiscodjia/Dev/06_research/imagerie_medicale/pr_impact_gt/nnUNet_data/nnUNet_preprocessed/Dataset100_PARSE/splits_final.json
+2026-04-21 23:47:06.074589: The split file contains 5 splits.
+2026-04-21 23:47:06.074632: Desired fold for training: 0
+2026-04-21 23:47:06.074668: This split has 68 training and 17 validation cases.
+run_pipeline.sh: line 186: 98408 Terminated: 15          nnUNetv2_train ${DATASET_ID} 3d_fullres ${FOLD} -tr ${TRAINER} --npz -device "${DEVICE}"

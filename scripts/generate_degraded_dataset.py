@@ -61,7 +61,6 @@ def degrade_labels(
     seed : int
         Graine aléatoire pour la reproductibilité.
     """
-    np.random.seed(seed)
     os.makedirs(output_dir, exist_ok=True)
 
     label_files = sorted(glob.glob(os.path.join(labels_dir, "*.nii.gz")))
@@ -70,15 +69,13 @@ def degrade_labels(
     print(f"  omission: prob={omission_prob}, min_size={omission_min_size}")
     print(f"  seed: {seed}")
 
-    for lbl_path in label_files:
+    for idx, lbl_path in enumerate(label_files):
+        np.random.seed(seed + idx)
         fname = os.path.basename(lbl_path)
         nii = nib.load(lbl_path)
         data = nii.get_fdata().astype(np.float32)
 
-        # Ajouter une dimension canal pour la compatibilité
         data_ch = data[np.newaxis, ...]
-
-        # Appliquer les dégradations
         degraded = apply_combined_degradation(
             data_ch,
             morpho_prob=morpho_prob,
@@ -87,13 +84,8 @@ def degrade_labels(
             omission_min_size=omission_min_size,
         )
 
-        # Retirer la dimension canal
-        degraded_3d = degraded[0]
-
-        # Sauvegarder avec le même header/affine
-        out_nii = nib.Nifti1Image(degraded_3d, nii.affine, nii.header)
-        out_path = os.path.join(output_dir, fname)
-        nib.save(out_nii, out_path)
+        out_nii = nib.Nifti1Image(degraded[0], nii.affine, nii.header)
+        nib.save(out_nii, os.path.join(output_dir, fname))
 
     print(f"  -> {len(label_files)} labels dégradés sauvegardés dans {output_dir}")
 

@@ -9,9 +9,24 @@ des dégradations de vérité terrain (GT) sur la performance de segmentation.
 ### Protocole expérimental
 
 1. **Model_Star** : nnU-Net entraîné sur GT propres (baseline)
-2. **Model_Minus** : nnU-Net entraîné sur GT dégradées (morpho + omission on-the-fly)
-3. **Cross-évaluation** : chaque modèle est testé sur GT\* et GT-
-4. **Grid search** : exploration systématique des paramètres de dégradation
+2. **Model_Minus_Stoch** : nnU-Net entraîné sur GT dégradées stochastiquement (morpho + omission on-the-fly, dégradation différente à chaque itération)
+3. **Model_Minus_Fixed** : nnU-Net entraîné sur GT dégradées déterministes (même dégradation fixe par image, générée une seule fois offline)
+4. **Cross-évaluation** : chaque modèle est testé sur GT\*, GT- mild et GT- severe
+5. **Grid search** : exploration systématique des paramètres de dégradation
+
+---
+
+## Questions de recherche
+
+| # | Question | Comparaison |
+|---|----------|-------------|
+| 1 | **Qualité du signal vs variabilité** — est-ce l'imprécision elle-même ou son instabilité qui nuit à l'apprentissage ? | `Minus_Fixed` vs `Minus_Stoch` évalués sur `GT*` |
+| 2 | **Seuils de rupture** — à partir de quel niveau de dégradation la performance chute significativement ? | Grid search morpho × omission, analyse des courbes Dice/HD95 |
+| 3 | **Robustesse induite** — le bruit stochastique à l'entraînement rend-il le modèle plus tolérant aux GT imparfaites au test ? | `Minus_Stoch` vs `Star` évalués sur `GT_mild` et `GT_severe` |
+| 4 | **Pénalisation injuste à l'évaluation** — un bon modèle perd-il des points uniquement parce que la GT de test est biaisée ? | `Star` évalué sur `GT*` vs `GT_minus` (même modèle, même images, GT différente) |
+| 5 | **Morpho vs omission** — quel type de dégradation pénalise le plus l'apprentissage ? | Phases 1 et 2 du grid search isolément |
+| 6 | **Asymétrie train/test de la pénalité** — la dégradation de l'entraînement et la dégradation de l'évaluation pénalisent-elles le modèle dans les mêmes proportions ? | Matrice complète 3 modèles × 3 scénarios GT |
+| 7 | **Spécificité de la robustesse** — la robustesse acquise à un type de dégradation est-elle générique ou limitée à ce type ? | `Minus_Stoch_morpho` évalué sur `GT_minus_omission` vs `Star` sur le même scénario |
 
 ### Structure du projet
 

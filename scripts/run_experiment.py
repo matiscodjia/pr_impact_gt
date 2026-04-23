@@ -2,9 +2,8 @@
 """Orchestrateur principal des expériences nnU-Net PARSE.
 
 Ce script coordonne l'intégralité du pipeline expérimental :
-conversion des données, prétraitement, entraînement des modèles
-(Star et Minus), prédiction et évaluation. Il peut être lancé
-étape par étape ou en mode complet.
+conversion, prétraitement, entraînement (Star, Minus_Stoch, Minus_Fixed),
+prédiction et évaluation.
 
 Usage
 -----
@@ -15,11 +14,14 @@ Usage
     python run_experiment.py --data_dir /chemin/PARSE --step convert
     python run_experiment.py --step preprocess
     python run_experiment.py --step train_star
-    python run_experiment.py --step train_minus
+    python run_experiment.py --step train_minus_stoch
+    python run_experiment.py --step create_fixed_dataset
+    python run_experiment.py --step preprocess_fixed
+    python run_experiment.py --step train_minus_fixed
     python run_experiment.py --step predict
     python run_experiment.py --step evaluate
 
-    # Mode debug sur macOS (réduit les époques, fold unique)
+    # Mode debug (1 fold, pipeline rapide)
     python run_experiment.py --data_dir /chemin/PARSE --step all --debug
 """
 
@@ -34,13 +36,6 @@ import yaml
 
 
 def detect_device() -> str:
-    """Détecte le device disponible.
-
-    Returns
-    -------
-    str
-        ``'cuda'``, ``'mps'`` ou ``'cpu'``.
-    """
     if torch.cuda.is_available():
         vram = torch.cuda.get_device_properties(0).total_mem / 1e9
         name = torch.cuda.get_device_name(0)
@@ -55,20 +50,6 @@ def detect_device() -> str:
 
 
 def run_cmd(cmd: list[str], env: dict | None = None) -> int:
-    """Lance une commande subprocess avec logging.
-
-    Parameters
-    ----------
-    cmd : list[str]
-        Commande à exécuter.
-    env : dict or None
-        Variables d'environnement additionnelles.
-
-    Returns
-    -------
-    int
-        Code de retour du processus.
-    """
     cmd_str = " ".join(cmd)
     print(f"\n{'─'*60}")
     print(f"CMD: {cmd_str}")
@@ -79,47 +60,25 @@ def run_cmd(cmd: list[str], env: dict | None = None) -> int:
         full_env.update(env)
 
     result = subprocess.run(cmd, env=full_env)
-
     if result.returncode != 0:
         print(f"ERREUR: commande échouée (code {result.returncode})")
     return result.returncode
 
 
 def step_convert(config: dict, args: argparse.Namespace) -> None:
-    """Convertit le dataset PARSE au format nnU-Net.
-
-    Parameters
-    ----------
-    config : dict
-        Configuration chargée depuis le YAML.
-    args : argparse.Namespace
-        Arguments de la ligne de commande.
-    """
     data_dir = args.data_dir or config["dataset"]["raw_dir"]
-    dataset_id = config["dataset"]["id"]
-
     run_cmd([
         sys.executable, "scripts/convert_parse_to_nnunet.py",
         "--data_dir", data_dir,
-        "--dataset_id", str(dataset_id),
+        "--dataset_id", str(config["dataset"]["id"]),
     ])
 
 
-def step_preprocess(config: dict, args: argparse.Namespace) -> None:
-    """Lance le prétraitement nnU-Net.
-
-    Parameters
-    ----------
-    config : dict
-        Configuration chargée depuis le YAML.
-    args : argparse.Namespace
-        Arguments de la ligne de commande.
-    """
-    dataset_id = config["dataset"]["id"]
-
+def step_preprocess(config: dict, args: argparse.Namespace, dataset_id: int | None = None) -> None:
+    did = dataset_id or config["dataset"]["id"]
     run_cmd([
         "nnUNetv2_plan_and_preprocess",
-        "-d", str(dataset_id),
+        "-d", str(did),
         "--verify_dataset_integrity",
     ])
 
@@ -129,109 +88,87 @@ def step_train(
     args: argparse.Namespace,
     trainer: str = "nnUNetTrainer",
     tag: str = "star",
+    dataset_id: int | None = None,
 ) -> None:
-    """Lance l'entraînement nnU-Net pour un trainer donné.
-
-    Parameters
-    ----------
-    config : dict
-        Configuration YAML.
-    args : argparse.Namespace
-        Arguments CLI.
-    trainer : str
-        Nom de la classe trainer nnU-Net.
-    tag : str
-        Tag pour le logging (``'star'`` ou ``'minus'``).
-    """
-    dataset_id = config["dataset"]["id"]
+    did = dataset_id or config["dataset"]["id"]
     device = detect_device()
+    folds = [0] if args.debug else config["training"]["folds"]
 
-    folds = config["training"]["folds"]
-    configs = config["training"]["configurations"]
-
-    if args.debug:
-        folds = [0]
-        print(f"[DEBUG] Fold unique: {folds}")
-
-    for nnunet_config in configs:
+    for nnunet_config in config["training"]["configurations"]:
         for fold in folds:
-            cmd = [
-                "nnUNetv2_train",
-                str(dataset_id),
-                nnunet_config,
-                str(fold),
-                "-tr", trainer,
-                "--npz",
-                "-device", device,
-            ]
-
             print(f"\n{'='*60}")
             print(f"  Training Model_{tag} | config={nnunet_config} | "
-                  f"fold={fold} | trainer={trainer}")
+                  f"fold={fold} | trainer={trainer} | dataset={did}")
             print(f"{'='*60}")
 
-            rc = run_cmd(cmd)
+            rc = run_cmd([
+                "nnUNetv2_train",
+                str(did), nnunet_config, str(fold),
+                "-tr", trainer, "--npz", "-device", device,
+            ])
             if rc != 0:
-                print(f"ERREUR: Training fold {fold} échoué. Arrêt.")
+                print(f"ERREUR: fold {fold} échoué. Arrêt.")
                 sys.exit(1)
 
 
-def step_predict(config: dict, args: argparse.Namespace) -> None:
-    """Lance les prédictions pour les deux modèles.
-
-    Parameters
-    ----------
-    config : dict
-        Configuration YAML.
-    args : argparse.Namespace
-        Arguments CLI.
-    """
+def step_create_fixed_dataset(config: dict, args: argparse.Namespace) -> None:
+    nnunet_raw = os.environ.get("nnUNet_raw", "nnUNet_data/nnUNet_raw")
     dataset_id = config["dataset"]["id"]
+    fixed_id = config["dataset"]["fixed_id"]
     dataset_name = f"Dataset{dataset_id:03d}_PARSE"
-    nnunet_raw = os.environ["nnUNet_raw"]
+    fixed_name = f"Dataset{fixed_id:03d}_PARSE_Fixed"
+
+    source_dir = os.path.join(nnunet_raw, dataset_name)
+    output_dir = os.path.join(nnunet_raw, fixed_name)
+
+    run_cmd([
+        sys.executable, "scripts/create_fixed_degraded_dataset.py",
+        "--source_dir", source_dir,
+        "--output_dir", output_dir,
+        "--config", args.config,
+    ])
+
+
+def step_predict(config: dict, args: argparse.Namespace) -> None:
+    dataset_id = config["dataset"]["id"]
+    fixed_id = config["dataset"]["fixed_id"]
+    dataset_name = f"Dataset{dataset_id:03d}_PARSE"
+    nnunet_raw = os.environ.get("nnUNet_raw", "nnUNet_data/nnUNet_raw")
     images_ts = os.path.join(nnunet_raw, dataset_name, "imagesTs")
 
     if not os.path.isdir(images_ts):
-        print(f"ERREUR: {images_ts} n'existe pas. Pas d'images de test.")
+        print(f"ERREUR: {images_ts} n'existe pas.")
         return
 
     nnunet_config = config["training"]["configurations"][0]
     device = detect_device()
+    fold_args = ["0"] if args.debug else [str(f) for f in config["training"]["folds"]]
 
-    for trainer, tag in [
-        ("nnUNetTrainer", "star"),
-        ("nnUNetTrainerDegraded", "minus"),
-    ]:
-        output_dir = os.path.join("predictions", f"model_{tag}")
+    models_to_predict = [
+        ("nnUNetTrainer",        dataset_id,  "model_star"),
+        ("nnUNetTrainerDegraded", dataset_id,  "model_minus_stoch"),
+        ("nnUNetTrainer",        fixed_id,    "model_minus_fixed"),
+    ]
+
+    for trainer, did, tag in models_to_predict:
+        output_dir = os.path.join("predictions", tag)
         os.makedirs(output_dir, exist_ok=True)
-
-        fold_str = "0" if args.debug else "0 1 2 3 4"
 
         cmd = [
             "nnUNetv2_predict",
             "-i", images_ts,
             "-o", output_dir,
-            "-d", str(dataset_id),
+            "-d", str(did),
             "-c", nnunet_config,
             "-tr", trainer,
-            "-f", *fold_str.split(),
+            "-f", *fold_args,
             "-device", device,
         ]
-
-        print(f"\n Prediction Model_{tag}...")
+        print(f"\n Prédiction {tag} (dataset={did}, trainer={trainer})...")
         run_cmd(cmd)
 
 
 def step_evaluate(config: dict, args: argparse.Namespace) -> None:
-    """Lance la cross-évaluation.
-
-    Parameters
-    ----------
-    config : dict
-        Configuration YAML.
-    args : argparse.Namespace
-        Arguments CLI.
-    """
     run_cmd([
         sys.executable, "scripts/cross_evaluate.py",
         "--config", args.config,
@@ -239,45 +176,38 @@ def step_evaluate(config: dict, args: argparse.Namespace) -> None:
 
 
 def main():
-    """Point d'entrée principal de l'orchestrateur."""
     parser = argparse.ArgumentParser(
         description="Orchestrateur des expériences nnU-Net PARSE"
     )
-    parser.add_argument(
-        "--data_dir", type=str, default=None,
-        help="Chemin vers le dataset PARSE source (requis pour 'convert')",
-    )
+    parser.add_argument("--data_dir", type=str, default=None)
     parser.add_argument(
         "--step", type=str, default="all",
         choices=[
-            "all", "convert", "preprocess", "train_star",
-            "train_minus", "predict", "evaluate",
+            "all", "convert", "preprocess",
+            "train_star", "train_minus_stoch",
+            "create_fixed_dataset", "preprocess_fixed", "train_minus_fixed",
+            "predict", "evaluate",
         ],
-        help="Étape à exécuter",
     )
-    parser.add_argument(
-        "--config", type=str, default="configs/experiment_config.yaml",
-        help="Fichier de configuration YAML",
-    )
-    parser.add_argument(
-        "--debug", action="store_true",
-        help="Mode debug : 1 fold, vérification rapide du pipeline",
-    )
+    parser.add_argument("--config", type=str, default="configs/experiment_config.yaml")
+    parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
 
     with open(args.config) as f:
         config = yaml.safe_load(f)
 
     steps_all = [
-        "convert", "preprocess", "train_star",
-        "train_minus", "predict", "evaluate",
+        "convert", "preprocess",
+        "train_star", "train_minus_stoch",
+        "create_fixed_dataset", "preprocess_fixed", "train_minus_fixed",
+        "predict", "evaluate",
     ]
     steps_to_run = steps_all if args.step == "all" else [args.step]
 
     print(f"\n{'#'*60}")
     print(f"  nnU-Net PARSE Experiment Pipeline")
-    print(f"  Steps: {', '.join(steps_to_run)}")
-    print(f"  Debug: {args.debug}")
+    print(f"  Steps : {', '.join(steps_to_run)}")
+    print(f"  Debug : {args.debug}")
     print(f"  Platform: {platform.system()} {platform.machine()}")
     print(f"{'#'*60}")
 
@@ -290,10 +220,17 @@ def main():
             step_preprocess(config, args)
         elif step == "train_star":
             step_train(config, args, trainer="nnUNetTrainer", tag="star")
-        elif step == "train_minus":
+        elif step == "train_minus_stoch":
+            step_train(config, args, trainer="nnUNetTrainerDegraded", tag="minus_stoch")
+        elif step == "create_fixed_dataset":
+            step_create_fixed_dataset(config, args)
+        elif step == "preprocess_fixed":
+            step_preprocess(config, args, dataset_id=config["dataset"]["fixed_id"])
+        elif step == "train_minus_fixed":
             step_train(
                 config, args,
-                trainer="nnUNetTrainerDegraded", tag="minus",
+                trainer="nnUNetTrainer", tag="minus_fixed",
+                dataset_id=config["dataset"]["fixed_id"],
             )
         elif step == "predict":
             step_predict(config, args)

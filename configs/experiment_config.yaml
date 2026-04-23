@@ -6,8 +6,10 @@
 dataset:
   id: 100
   name: "Dataset100_PARSE"
+  fixed_id: 101
+  fixed_name: "Dataset101_PARSE_Fixed"
   # Chemin vers les données PARSE brutes (structure: images/ labels/)
-  raw_dir: "/chemin/vers/PARSE"
+  raw_dir: "./data"
   # Proportion train/val/test
   splits:
     train: 0.70
@@ -55,21 +57,17 @@ grid_search:
 # ── Évaluation ──
 evaluation:
   # Métriques à calculer
-  metrics: ["Dice", "HD95", "NSD"]
+  metrics: ["CLDice", "HD95", "NSD", "Betti0"]
   # Scénarios de cross-évaluation
   scenarios:
     - name: "GT_star"
       description: "Évaluation sur GT propres"
       degradation: null
-    - name: "GT_minus_mild"
-      description: "Évaluation sur GT légèrement dégradées"
+    - name: "GT_minus_test"
+      description: "Évaluation sur GT de test dégradées avec les mêmes paramètres qu'à l'entraînement"
       degradation:
-        morpho: {prob: 1.0, max_radius: 2}
-    - name: "GT_minus_severe"
-      description: "Évaluation sur GT sévèrement dégradées"
-      degradation:
-        morpho: {prob: 1.0, max_radius: 5}
-        omission: {prob: 1.0, min_size: 200}
+        morpho: {prob: 0.3, max_radius: 3}
+        omission: {prob: 0.2, min_size: 150}
 
 # ── Hardware profiles ──
 hardware:

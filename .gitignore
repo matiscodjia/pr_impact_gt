@@ -10,3 +10,4 @@ nnUNet_data
 .DS_Store
 # Virtual environments
 .venv
+.claude

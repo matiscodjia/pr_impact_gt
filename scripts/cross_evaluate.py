@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""Cross-évaluation des modèles Model_Star et Model_Minus.
+"""Cross-évaluation des trois modèles : Model_Star, Model_Minus_Stoch, Model_Minus_Fixed.
 
-Calcule les métriques de segmentation (Dice, HD95, NSD) pour chaque
-combinaison modèle × scénario de GT :
+Matrice d'évaluation complète (3 modèles × 3 scénarios GT) :
 
-    ┌──────────────┬──────────┬────────────────┬──────────────────┐
-    │              │ GT*      │ GT- (mild)     │ GT- (severe)     │
-    ├──────────────┼──────────┼────────────────┼──────────────────┤
-    │ Model_Star   │ baseline │ robustesse     │ robustesse       │
-    │ Model_Minus  │ qualité  │ cible          │ cible            │
-    └──────────────┴──────────┴────────────────┴──────────────────┘
+    ┌──────────────────┬──────────┬────────────────┬──────────────────┐
+    │                  │ GT*      │ GT_minus_test  │
+    ├──────────────────┼──────────┼────────────────┤
+    │ Model_Star       │ baseline │ pénalité eval  │
+    │ Model_Minus_Stoch│ qualité  │ biais mémorisé?│
+    │ Model_Minus_Fixed│ qualité  │ biais mémorisé?│
+    └──────────────────┴──────────┴────────────────┘
 
-Les résultats sont sauvegardés en CSV et des visualisations (heatmaps,
-bar charts) sont générées automatiquement.
+Outcomes adressés :
+    1 — Quality vs variability : Minus_Fixed vs Minus_Stoch sur GT*
+    3 — Robustesse induite     : Minus_Stoch vs Star sur GT_minus
+    4 — Pénalité injuste       : Star sur GT* vs GT_minus
+    6 — Asymétrie train/test   : pénalité train vs pénalité eval
 
 Usage
 -----
@@ -22,30 +25,17 @@ Usage
 import argparse
 import glob
 import os
-from collections import defaultdict
 
 import nibabel as nib
 import numpy as np
 import pandas as pd
 import yaml
+from scipy.stats import wilcoxon
 
 
-def compute_dice(pred: np.ndarray, gt: np.ndarray) -> float:
-    """Calcule le coefficient de Dice entre deux masques binaires.
+def compute_cldice(pred: np.ndarray, gt: np.ndarray) -> float:
+    from skimage.morphology import skeletonize
 
-    Parameters
-    ----------
-    pred : np.ndarray
-        Masque prédit (binaire).
-    gt : np.ndarray
-        Masque de référence (binaire).
-
-    Returns
-    -------
-    float
-        Score Dice entre 0 et 1. Retourne 1.0 si les deux masques
-        sont vides, 0.0 si un seul est vide.
-    """
     pred_bool = pred > 0.5
     gt_bool = gt > 0.5
 
@@ -54,27 +44,52 @@ def compute_dice(pred: np.ndarray, gt: np.ndarray) -> float:
     if not pred_bool.any() or not gt_bool.any():
         return 0.0
 
-    intersection = np.logical_and(pred_bool, gt_bool).sum()
-    return 2.0 * intersection / (pred_bool.sum() + gt_bool.sum())
+    skel_pred = skeletonize(pred_bool)
+    skel_gt = skeletonize(gt_bool)
+
+    # Tprec : fraction du squelette prédit couverte par le volume GT
+    tprec = np.logical_and(skel_pred, gt_bool).sum() / max(skel_pred.sum(), 1)
+    # Tsens : fraction du squelette GT couverte par le volume prédit
+    tsens = np.logical_and(skel_gt, pred_bool).sum() / max(skel_gt.sum(), 1)
+
+    if tprec + tsens == 0:
+        return 0.0
+    return float(2.0 * tprec * tsens / (tprec + tsens))
+
+
+def compute_nsd(pred: np.ndarray, gt: np.ndarray, spacing: tuple = (1, 1, 1), tolerance: float = 2.0) -> float:
+    from scipy.ndimage import binary_erosion, distance_transform_edt
+
+    pred_bool = pred > 0.5
+    gt_bool = gt > 0.5
+
+    if not pred_bool.any() and not gt_bool.any():
+        return 1.0
+    if not pred_bool.any() or not gt_bool.any():
+        return 0.0
+
+    struct = np.ones((3, 3, 3))
+    surf_pred = pred_bool ^ binary_erosion(pred_bool, structure=struct)
+    surf_gt = gt_bool ^ binary_erosion(gt_bool, structure=struct)
+
+    dt_from_surf_gt = distance_transform_edt(~surf_gt, sampling=spacing)
+    dt_from_surf_pred = distance_transform_edt(~surf_pred, sampling=spacing)
+
+    pred_within = (dt_from_surf_gt[surf_pred] <= tolerance).sum()
+    gt_within = (dt_from_surf_pred[surf_gt] <= tolerance).sum()
+
+    return float((pred_within + gt_within) / (surf_pred.sum() + surf_gt.sum()))
+
+
+def compute_betti0(pred: np.ndarray, gt: np.ndarray) -> int:
+    from scipy.ndimage import label
+
+    _, n_pred = label(pred > 0.5)
+    _, n_gt = label(gt > 0.5)
+    return abs(n_pred - n_gt)
 
 
 def compute_hd95(pred: np.ndarray, gt: np.ndarray, spacing: tuple = (1, 1, 1)) -> float:
-    """Calcule la distance de Hausdorff au 95e percentile.
-
-    Parameters
-    ----------
-    pred : np.ndarray
-        Masque prédit (binaire).
-    gt : np.ndarray
-        Masque de référence (binaire).
-    spacing : tuple of float
-        Espacement voxel en mm.
-
-    Returns
-    -------
-    float
-        HD95 en mm. Retourne ``np.inf`` si un des masques est vide.
-    """
     from scipy.ndimage import distance_transform_edt
 
     pred_bool = pred > 0.5
@@ -83,17 +98,11 @@ def compute_hd95(pred: np.ndarray, gt: np.ndarray, spacing: tuple = (1, 1, 1)) -
     if not pred_bool.any() or not gt_bool.any():
         return np.inf
 
-    # Distance de chaque voxel GT au plus proche voxel prédit
     dt_pred = distance_transform_edt(~pred_bool, sampling=spacing)
-    # Distance de chaque voxel prédit au plus proche voxel GT
     dt_gt = distance_transform_edt(~gt_bool, sampling=spacing)
 
-    # Distances surface → surface
-    distances_gt_to_pred = dt_pred[gt_bool]
-    distances_pred_to_gt = dt_gt[pred_bool]
-
-    all_distances = np.concatenate([distances_gt_to_pred, distances_pred_to_gt])
-    return np.percentile(all_distances, 95)
+    all_distances = np.concatenate([dt_pred[gt_bool], dt_gt[pred_bool]])
+    return float(np.percentile(all_distances, 95))
 
 
 def evaluate_predictions(
@@ -102,24 +111,6 @@ def evaluate_predictions(
     model_name: str,
     scenario_name: str,
 ) -> list[dict]:
-    """Évalue un dossier de prédictions contre un dossier de GT.
-
-    Parameters
-    ----------
-    pred_dir : str
-        Dossier contenant les prédictions (.nii.gz).
-    gt_dir : str
-        Dossier contenant les labels de référence (.nii.gz).
-    model_name : str
-        Nom du modèle (pour le logging).
-    scenario_name : str
-        Nom du scénario GT (pour le logging).
-
-    Returns
-    -------
-    list[dict]
-        Liste de dictionnaires avec les métriques par cas.
-    """
     pred_files = sorted(glob.glob(os.path.join(pred_dir, "*.nii.gz")))
     results = []
 
@@ -133,63 +124,147 @@ def evaluate_predictions(
 
         pred_nii = nib.load(pred_path)
         gt_nii = nib.load(gt_path)
+        spacing = pred_nii.header.get_zooms()[:3]
 
         pred_data = pred_nii.get_fdata()
         gt_data = gt_nii.get_fdata()
 
-        # Récupérer le spacing pour HD95
-        spacing = pred_nii.header.get_zooms()[:3]
-
-        dice = compute_dice(pred_data, gt_data)
+        cldice = compute_cldice(pred_data, gt_data)
         hd95 = compute_hd95(pred_data, gt_data, spacing=spacing)
+        nsd = compute_nsd(pred_data, gt_data, spacing=spacing)
+        betti0 = compute_betti0(pred_data, gt_data)
 
         results.append({
             "model": model_name,
             "scenario": scenario_name,
             "case": fname,
-            "dice": dice,
+            "cldice": cldice,
             "hd95": hd95,
+            "nsd": nsd,
+            "betti0": betti0,
         })
 
     return results
 
 
-def generate_summary_plots(df: pd.DataFrame, output_dir: str) -> None:
-    """Génère les visualisations de synthèse.
+def pairwise_wilcoxon(df: pd.DataFrame) -> pd.DataFrame:
+    """Tests de Wilcoxon par paires de modèles pour chaque scénario GT.
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame avec toutes les métriques.
-    output_dir : str
-        Dossier de sortie pour les figures.
+    Inclut la taille d'effet (Cohen's d apparié) et la correction FDR
+    de Benjamini-Hochberg sur l'ensemble des comparaisons.
+
+    Returns
+    -------
+    pd.DataFrame
+        Colonnes : scenario, model_a, model_b, mean_a, mean_b,
+                   delta, cohens_d, p_value, p_fdr, significant
     """
+    models = sorted(df["model"].unique())
+    scenarios = sorted(df["scenario"].unique())
+    rows = []
+
+    for scenario in scenarios:
+        sc_df = df[df["scenario"] == scenario]
+        for i, model_a in enumerate(models):
+            for model_b in models[i+1:]:
+                a_vals = (
+                    sc_df[sc_df["model"] == model_a]
+                    .set_index("case")["cldice"]
+                )
+                b_vals = (
+                    sc_df[sc_df["model"] == model_b]
+                    .set_index("case")["cldice"]
+                )
+                # Garder les cas communs pour le test apparié
+                common = a_vals.index.intersection(b_vals.index)
+                if len(common) < 5:
+                    continue
+
+                a = a_vals.loc[common].values
+                b = b_vals.loc[common].values
+                diff = b - a
+
+                try:
+                    _, p_value = wilcoxon(a, b)
+                except ValueError:
+                    p_value = np.nan
+
+                # Cohen's d apparié
+                std_diff = np.std(diff, ddof=1)
+                cohens_d = np.mean(diff) / std_diff if std_diff > 0 else np.nan
+
+                rows.append({
+                    "scenario": scenario,
+                    "model_a": model_a,
+                    "model_b": model_b,
+                    "n_cases": len(common),
+                    "mean_a": float(np.mean(a)),
+                    "mean_b": float(np.mean(b)),
+                    "delta": float(np.mean(diff)),
+                    "cohens_d": float(cohens_d) if not np.isnan(cohens_d) else None,
+                    "p_value": float(p_value) if not np.isnan(p_value) else None,
+                })
+
+    if not rows:
+        return pd.DataFrame()
+
+    stat_df = pd.DataFrame(rows)
+
+    # Correction FDR Benjamini-Hochberg
+    p_vals = stat_df["p_value"].fillna(1.0).values
+    n = len(p_vals)
+    sorted_idx = np.argsort(p_vals)
+    p_fdr = np.empty(n)
+    p_fdr[sorted_idx] = p_vals[sorted_idx] * n / (np.arange(n) + 1)
+    # Correction monotone
+    for k in range(n - 2, -1, -1):
+        p_fdr[sorted_idx[k]] = min(p_fdr[sorted_idx[k]], p_fdr[sorted_idx[k + 1]])
+    p_fdr = np.clip(p_fdr, 0, 1)
+
+    stat_df["p_fdr"] = p_fdr
+    stat_df["significant"] = stat_df["p_fdr"] < 0.05
+
+    return stat_df.round(4)
+
+
+def generate_summary_plots(df: pd.DataFrame, output_dir: str) -> None:
     import matplotlib.pyplot as plt
     import seaborn as sns
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # ── 1. Heatmap Dice ──
-    pivot = df.groupby(["model", "scenario"])["dice"].mean().unstack()
-
-    fig, ax = plt.subplots(figsize=(8, 4))
+    # ── Heatmap Dice ──
+    pivot = df.groupby(["model", "scenario"])["cldice"].mean().unstack()
+    _, ax = plt.subplots(figsize=(9, len(pivot) * 1.2 + 1))
     sns.heatmap(
         pivot, annot=True, fmt=".3f", cmap="RdYlGn",
         vmin=0.3, vmax=0.95, linewidths=0.5, ax=ax,
     )
-    ax.set_title("Cross-évaluation — Dice moyen")
+    ax.set_title("Cross-évaluation — CLDice moyen")
     ax.set_ylabel("Modèle")
     ax.set_xlabel("Scénario GT")
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "heatmap_dice.png"), dpi=150)
+    plt.savefig(os.path.join(output_dir, "heatmap_cldice.png"), dpi=150)
     plt.close()
 
-    # ── 2. Heatmap HD95 ──
-    pivot_hd = df.groupby(["model", "scenario"])["hd95"].mean().unstack()
-    # Clipper les inf pour la visualisation
-    pivot_hd = pivot_hd.replace([np.inf], np.nan)
+    # ── Heatmap Betti0 ──
+    pivot_b0 = df.groupby(["model", "scenario"])["betti0"].mean().unstack()
+    _, ax = plt.subplots(figsize=(9, len(pivot_b0) * 1.2 + 1))
+    sns.heatmap(
+        pivot_b0, annot=True, fmt=".1f", cmap="RdYlGn_r",
+        linewidths=0.5, ax=ax,
+    )
+    ax.set_title("Cross-évaluation — Betti0 moyen (|Δ composantes connexes|)")
+    ax.set_ylabel("Modèle")
+    ax.set_xlabel("Scénario GT")
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "heatmap_betti0.png"), dpi=150)
+    plt.close()
 
-    fig, ax = plt.subplots(figsize=(8, 4))
+    # ── Heatmap HD95 ──
+    pivot_hd = df.groupby(["model", "scenario"])["hd95"].mean().unstack()
+    pivot_hd = pivot_hd.replace([np.inf], np.nan)
+    _, ax = plt.subplots(figsize=(9, len(pivot_hd) * 1.2 + 1))
     sns.heatmap(
         pivot_hd, annot=True, fmt=".1f", cmap="RdYlGn_r",
         linewidths=0.5, ax=ax,
@@ -201,21 +276,23 @@ def generate_summary_plots(df: pd.DataFrame, output_dir: str) -> None:
     plt.savefig(os.path.join(output_dir, "heatmap_hd95.png"), dpi=150)
     plt.close()
 
-    # ── 3. Box plots par modèle ──
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    # ── Box plots Dice ──
+    fig, axes = plt.subplots(1, 2, figsize=(16, 5))
+    palette = {"Model_Star": "#4CAF50", "Model_Minus_Stoch": "#FF9800", "Model_Minus_Fixed": "#2196F3"}
 
     sns.boxplot(
-        data=df, x="scenario", y="dice", hue="model",
-        ax=axes[0], palette="Set2",
+        data=df, x="scenario", y="cldice", hue="model",
+        ax=axes[0], palette=palette,
     )
-    axes[0].set_title("Distribution Dice par scénario")
+    axes[0].set_title("Distribution CLDice par scénario")
     axes[0].set_ylim(0, 1)
+    axes[0].legend(loc="lower left")
 
     df_finite = df[df["hd95"] < np.inf]
     if not df_finite.empty:
         sns.boxplot(
             data=df_finite, x="scenario", y="hd95", hue="model",
-            ax=axes[1], palette="Set2",
+            ax=axes[1], palette=palette,
         )
     axes[1].set_title("Distribution HD95 par scénario")
 
@@ -227,17 +304,11 @@ def generate_summary_plots(df: pd.DataFrame, output_dir: str) -> None:
 
 
 def main():
-    """Point d'entrée principal de la cross-évaluation."""
     parser = argparse.ArgumentParser(
-        description="Cross-évaluation Model_Star vs Model_Minus"
+        description="Cross-évaluation Model_Star / Model_Minus_Stoch / Model_Minus_Fixed"
     )
-    parser.add_argument(
-        "--config", type=str, default="configs/experiment_config.yaml",
-    )
-    parser.add_argument(
-        "--output", type=str, default="results",
-        help="Dossier de sortie",
-    )
+    parser.add_argument("--config", type=str, default="configs/experiment_config.yaml")
+    parser.add_argument("--output", type=str, default="results")
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -250,13 +321,19 @@ def main():
 
     os.makedirs(args.output, exist_ok=True)
 
-    all_results = []
-
-    # Modèles à évaluer
+    # Modèles — Model_Minus_Stoch garde le dossier "model_minus" pour
+    # la compatibilité ascendante avec les runs existants
     models = {
-        "Model_Star": os.path.join("predictions", "model_star"),
-        "Model_Minus": os.path.join("predictions", "model_minus"),
+        "Model_Star":        os.path.join("predictions", "model_star"),
+        "Model_Minus_Stoch": os.path.join("predictions", "model_minus_stoch"),
+        "Model_Minus_Fixed": os.path.join("predictions", "model_minus_fixed"),
     }
+    # Rétrocompatibilité : si model_minus_stoch absent, chercher model_minus
+    if not os.path.isdir(models["Model_Minus_Stoch"]):
+        legacy = os.path.join("predictions", "model_minus")
+        if os.path.isdir(legacy):
+            print(f"[COMPAT] Utilisation de {legacy} pour Model_Minus_Stoch")
+            models["Model_Minus_Stoch"] = legacy
 
     # Scénarios GT
     scenarios = {}
@@ -267,33 +344,30 @@ def main():
         else:
             scenarios[name] = os.path.join(dataset_dir, f"labelsTs_{name}")
 
-    # Cross-évaluation
+    all_results = []
+
     for model_name, pred_dir in models.items():
         if not os.path.isdir(pred_dir):
-            print(f"[SKIP] {pred_dir} n'existe pas")
+            print(f"[SKIP] {pred_dir} introuvable — {model_name} ignoré")
             continue
 
         for scenario_name, gt_dir in scenarios.items():
             if not os.path.isdir(gt_dir):
-                print(f"[SKIP] {gt_dir} n'existe pas")
+                print(f"[SKIP] {gt_dir} introuvable")
                 continue
 
             print(f"\nÉvaluation: {model_name} × {scenario_name}")
-            results = evaluate_predictions(
-                pred_dir, gt_dir, model_name, scenario_name,
-            )
+            results = evaluate_predictions(pred_dir, gt_dir, model_name, scenario_name)
             all_results.extend(results)
 
-            # Résumé rapide
             if results:
-                dices = [r["dice"] for r in results]
-                print(f"  Dice: {np.mean(dices):.4f} ± {np.std(dices):.4f}")
+                cldices = [r["cldice"] for r in results]
+                print(f"  CLDice: {np.mean(cldices):.4f} ± {np.std(cldices):.4f}")
 
     if not all_results:
         print("\nAucun résultat. Vérifiez que les prédictions et labels existent.")
         return
 
-    # Sauvegarder en CSV
     df = pd.DataFrame(all_results)
     csv_path = os.path.join(args.output, "cross_evaluation.csv")
     df.to_csv(csv_path, index=False)
@@ -304,13 +378,25 @@ def main():
     print("RÉSUMÉ")
     print(f"{'='*60}")
     summary = df.groupby(["model", "scenario"]).agg(
-        dice_mean=("dice", "mean"),
-        dice_std=("dice", "std"),
+        cldice_mean=("cldice", "mean"),
+        cldice_std=("cldice", "std"),
         hd95_mean=("hd95", lambda x: np.mean(x[x < np.inf])),
+        nsd_mean=("nsd", "mean"),
+        betti0_mean=("betti0", "mean"),
     ).round(4)
-    print(summary)
+    print(summary.to_string())
 
-    # Générer les plots
+    # Tests statistiques appariés (pairwise, FDR corrigé)
+    print(f"\n{'='*60}")
+    print("TESTS STATISTIQUES (Wilcoxon apparié, FDR Benjamini-Hochberg)")
+    print(f"{'='*60}")
+    stat_df = pairwise_wilcoxon(df)
+    if not stat_df.empty:
+        stat_path = os.path.join(args.output, "statistical_tests.csv")
+        stat_df.to_csv(stat_path, index=False)
+        print(stat_df.to_string(index=False))
+        print(f"\nTests sauvegardés : {stat_path}")
+
     generate_summary_plots(df, os.path.join(args.output, "figures"))
 
 

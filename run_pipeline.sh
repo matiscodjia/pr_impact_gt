@@ -89,7 +89,7 @@ if [[ -z "${nnUNet_raw:-}" ]]; then
 fi
 
 # ── Ordre des étapes ──
-STEPS=(convert preprocess generate_degraded train_star train_minus predict evaluate grid_search aggregate)
+STEPS=(convert preprocess generate_degraded train_star train_minus_stoch create_fixed_dataset preprocess_fixed train_minus_fixed predict evaluate grid_search aggregate)
 
 # Trouver l'index de départ
 START_IDX=0
@@ -169,7 +169,7 @@ fi
 # ============================================================================
 # ÉTAPE 4 : Entraînement Model_Star (baseline, GT propres)
 # ============================================================================
-if should_run "train_star" || should_run "train_minus"; then
+if should_run "train_star" || should_run "train_minus_stoch"; then
     echo "Mise à jour du custom trainer..."
     NNUNET_TRAINER_DIR="$(python3 -c "import nnunetv2; import os; print(os.path.join(nnunetv2.__path__[0], 'training', 'nnUNetTrainer'))")"
     cp "custom_trainers/nnUNetTrainerDegraded.py" "${NNUNET_TRAINER_DIR}/"
@@ -200,10 +200,10 @@ if should_run "train_star"; then
 fi
 
 # ============================================================================
-# ÉTAPE 5 : Entraînement Model_Minus (GT dégradées on-the-fly)
+# ÉTAPE 5 : Entraînement Model_Minus_Stoch (GT dégradées on-the-fly)
 # ============================================================================
-if should_run "train_minus"; then
-    step_header "5/9 — Entraînement Model_Minus (nnUNetTrainerDegraded)"
+if should_run "train_minus_stoch"; then
+    step_header "5/12 — Entraînement Model_Minus_Stoch (nnUNetTrainerDegraded)"
 
     export DEBUG_PIPELINE=$([[ "${DEBUG}" == "true" ]] && echo "1" || echo "0")
 
@@ -220,14 +220,60 @@ if should_run "train_minus"; then
     done
 
     echo ""
-    echo "Model_Minus : tous les folds terminés."
+    echo "Model_Minus_Stoch : tous les folds terminés."
 fi
 
 # ============================================================================
-# ÉTAPE 6 : Prédictions des deux modèles sur le test set
+# ÉTAPE 6 : Création de Dataset101_PARSE_Fixed (labels train dégradés fixes)
+# ============================================================================
+if should_run "create_fixed_dataset"; then
+    step_header "6/12 — Création Dataset101_PARSE_Fixed"
+
+    uv run scripts/create_fixed_degraded_dataset.py \
+        --source_dir "${nnUNet_raw}/Dataset${DATASET_ID}_PARSE" \
+        --output_dir "${nnUNet_raw}/Dataset101_PARSE_Fixed" \
+        --config configs/experiment_config.yaml \
+        --seed 42
+fi
+
+# ============================================================================
+# ÉTAPE 7 : Prétraitement Dataset101
+# ============================================================================
+if should_run "preprocess_fixed"; then
+    step_header "7/12 — Prétraitement nnU-Net Dataset101_PARSE_Fixed"
+
+    nnUNetv2_plan_and_preprocess \
+        -d 101 \
+        --verify_dataset_integrity
+fi
+
+# ============================================================================
+# ÉTAPE 8 : Entraînement Model_Minus_Fixed (trainer standard sur labels fixes)
+# ============================================================================
+if should_run "train_minus_fixed"; then
+    step_header "8/12 — Entraînement Model_Minus_Fixed (nnUNetTrainer sur Dataset101)"
+
+    for FOLD in "${FOLDS[@]}"; do
+        echo ""
+        echo "  ── Fold ${FOLD}/4 ──"
+        nnUNetv2_train \
+            101 \
+            3d_fullres \
+            ${FOLD} \
+            -tr nnUNetTrainer \
+            --npz \
+            -device "${DEVICE}"
+    done
+
+    echo ""
+    echo "Model_Minus_Fixed : tous les folds terminés."
+fi
+
+# ============================================================================
+# ÉTAPE 9 : Prédictions des trois modèles sur le test set
 # ============================================================================
 if should_run "predict"; then
-    step_header "6/9 — Prédiction sur le test set"
+    step_header "9/12 — Prédiction sur le test set (Star, Minus_Stoch, Minus_Fixed)"
 
     IMAGES_TS="${nnUNet_raw}/Dataset${DATASET_ID}_PARSE/imagesTs"
     FOLD_ARGS=$(printf "%s " "${FOLDS[@]}")
@@ -249,23 +295,35 @@ if should_run "predict"; then
         -device "${DEVICE}"
 
     echo ""
-    echo "  Prédiction Model_Minus (nnUNetTrainerDegraded)..."
-    mkdir -p predictions/model_minus
+    echo "  Prédiction Model_Minus_Stoch (nnUNetTrainerDegraded, dataset ${DATASET_ID})..."
+    mkdir -p predictions/model_minus_stoch
     nnUNetv2_predict \
         -i "${IMAGES_TS}" \
-        -o predictions/model_minus \
+        -o predictions/model_minus_stoch \
         -d ${DATASET_ID} \
         -c 3d_fullres \
         -tr nnUNetTrainerDegraded \
         -f ${FOLD_ARGS} \
         -device "${DEVICE}"
+
+    echo ""
+    echo "  Prédiction Model_Minus_Fixed (nnUNetTrainer, dataset 101)..."
+    mkdir -p predictions/model_minus_fixed
+    nnUNetv2_predict \
+        -i "${IMAGES_TS}" \
+        -o predictions/model_minus_fixed \
+        -d 101 \
+        -c 3d_fullres \
+        -tr nnUNetTrainer \
+        -f ${FOLD_ARGS} \
+        -device "${DEVICE}"
 fi
 
 # ============================================================================
-# ÉTAPE 7 : Cross-évaluation
+# ÉTAPE 10 : Cross-évaluation
 # ============================================================================
 if should_run "evaluate"; then
-    step_header "7/9 — Cross-évaluation Model_Star vs Model_Minus"
+    step_header "10/12 — Cross-évaluation (Star / Minus_Stoch / Minus_Fixed)"
 
     uv run scripts/cross_evaluate.py \
         --config configs/experiment_config.yaml \
@@ -273,10 +331,10 @@ if should_run "evaluate"; then
 fi
 
 # ============================================================================
-# ÉTAPE 8 : Grid search (optionnel, long)
+# ÉTAPE 11 : Grid search (optionnel, long)
 # ============================================================================
 if should_run "grid_search"; then
-    step_header "8/9 — Grid search des paramètres de dégradation"
+    step_header "11/12 — Grid search des paramètres de dégradation"
 
     if [[ "${DEBUG}" == "true" ]]; then
         echo "[DEBUG] Grid search skippé en mode debug"
@@ -290,10 +348,10 @@ if should_run "grid_search"; then
 fi
 
 # ============================================================================
-# ÉTAPE 9 : Agrégation et visualisation
+# ÉTAPE 12 : Agrégation et visualisation
 # ============================================================================
 if should_run "aggregate"; then
-    step_header "9/9 — Agrégation des résultats"
+    step_header "12/12 — Agrégation des résultats (7 outcomes)"
 
     uv run scripts/aggregate_results.py \
         --results_dir results
