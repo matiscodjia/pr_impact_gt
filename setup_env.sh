@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-MODE="${1:---local}"
+MODE="${1:?Usage: bash setup_env.sh [--local|--cluster]}"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "============================================"
