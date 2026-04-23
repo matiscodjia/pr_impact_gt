@@ -54,17 +54,16 @@ done
 
 # ── Détection automatique du device ──
 detect_device() {
-    python3 -c "
-import torch
-if torch.cuda.is_available():
-    name = torch.cuda.get_device_name(0)
-    vram = torch.cuda.get_device_properties(0).total_mem / 1e9
-    print(f'cuda (détecté: {name}, {vram:.0f} Go)')
-elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-    print('mps (Apple Silicon)')
-else:
-    print('cpu')
-" 2>/dev/null | head -1
+    if command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
+        local gpu_name vram
+        gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+        vram=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
+        echo "cuda (détecté: ${gpu_name}, $((vram / 1024)) Go)"
+    elif python3 -c "import torch; assert torch.backends.mps.is_available()" 2>/dev/null; then
+        echo "mps (Apple Silicon)"
+    else
+        echo "cpu"
+    fi
 }
 
 DEVICE_INFO=$(detect_device)
@@ -72,7 +71,7 @@ DEVICE=$(echo "${DEVICE_INFO}" | cut -d' ' -f1)
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
-echo "║  nnU-Net PARSE — Pipeline de segmentation               ║"
+echo "║  nnU-Net PARSE — Pipeline de segmentation                ║"
 echo "╠══════════════════════════════════════════════════════════╣"
 echo "║  Data:   ${DATA_DIR}"
 echo "║  Device: ${DEVICE_INFO}"
