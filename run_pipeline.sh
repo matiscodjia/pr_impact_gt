@@ -43,12 +43,14 @@ shift
 DEBUG=false
 FROM_STEP="convert"
 DATASET_ID=100
+SKIP_STOCH=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --debug) DEBUG=true; shift ;;
-        --from)  FROM_STEP="$2"; shift 2 ;;
-        *)       echo "Argument inconnu: $1"; exit 1 ;;
+        --debug)       DEBUG=true; shift ;;
+        --from)        FROM_STEP="$2"; shift 2 ;;
+        --skip-stoch)  SKIP_STOCH=true; shift ;;
+        *)             echo "Argument inconnu: $1"; exit 1 ;;
     esac
 done
 
@@ -77,6 +79,7 @@ echo "║  Data:   ${DATA_DIR}"
 echo "║  Device: ${DEVICE_INFO}"
 echo "║  Debug:  ${DEBUG}"
 echo "║  From:   ${FROM_STEP}"
+echo "║  Skip stoch: ${SKIP_STOCH}"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -201,7 +204,7 @@ fi
 # ============================================================================
 # ÉTAPE 5 : Entraînement Model_Minus_Stoch (GT dégradées on-the-fly)
 # ============================================================================
-if should_run "train_minus_stoch"; then
+if should_run "train_minus_stoch" && [[ "${SKIP_STOCH}" == "false" ]]; then
     step_header "5/12 — Entraînement Model_Minus_Stoch (nnUNetTrainerDegraded)"
 
     export DEBUG_PIPELINE=$([[ "${DEBUG}" == "true" ]] && echo "1" || echo "0")
@@ -220,6 +223,8 @@ if should_run "train_minus_stoch"; then
 
     echo ""
     echo "Model_Minus_Stoch : tous les folds terminés."
+elif [[ "${SKIP_STOCH}" == "true" ]]; then
+    echo "[SKIP] train_minus_stoch ignoré (--skip-stoch)"
 fi
 
 # ============================================================================
@@ -293,17 +298,21 @@ if should_run "predict"; then
         -f ${FOLD_ARGS} \
         -device "${DEVICE}"
 
-    echo ""
-    echo "  Prédiction Model_Minus_Stoch (nnUNetTrainerDegraded, dataset ${DATASET_ID})..."
-    mkdir -p predictions/model_minus_stoch
-    nnUNetv2_predict \
-        -i "${IMAGES_TS}" \
-        -o predictions/model_minus_stoch \
-        -d ${DATASET_ID} \
-        -c 3d_fullres \
-        -tr nnUNetTrainerDegraded \
-        -f ${FOLD_ARGS} \
-        -device "${DEVICE}"
+    if [[ "${SKIP_STOCH}" == "false" ]]; then
+        echo ""
+        echo "  Prédiction Model_Minus_Stoch (nnUNetTrainerDegraded, dataset ${DATASET_ID})..."
+        mkdir -p predictions/model_minus_stoch
+        nnUNetv2_predict \
+            -i "${IMAGES_TS}" \
+            -o predictions/model_minus_stoch \
+            -d ${DATASET_ID} \
+            -c 3d_fullres \
+            -tr nnUNetTrainerDegraded \
+            -f ${FOLD_ARGS} \
+            -device "${DEVICE}"
+    else
+        echo "[SKIP] Prédiction Model_Minus_Stoch ignorée (--skip-stoch)"
+    fi
 
     echo ""
     echo "  Prédiction Model_Minus_Fixed (nnUNetTrainer, dataset 101)..."
