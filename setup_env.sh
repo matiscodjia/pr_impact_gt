@@ -94,7 +94,7 @@ print(f'  PyTorch:  {torch.__version__}')
 print(f'  nnU-Net:  OK (path: {nnunetv2.__path__[0]})')
 if torch.cuda.is_available():
     print(f'  GPU:      {torch.cuda.get_device_name(0)}')
-    print(f'  VRAM:     {torch.cuda.get_device_properties(0).total_mem/1e9:.0f} Go')
+    print(f'  VRAM:     {torch.cuda.get_device_properties(0).total_memory/1e9:.0f} Go')
 elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
     print(f'  GPU:      Apple MPS')
 else:
