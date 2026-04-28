@@ -25,6 +25,9 @@ Usage
 import argparse
 import glob
 import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+from tqdm import tqdm
 
 import nibabel as nib
 import numpy as np
@@ -105,46 +108,60 @@ def compute_hd95(pred: np.ndarray, gt: np.ndarray, spacing: tuple = (1, 1, 1)) -
     return float(np.percentile(all_distances, 95))
 
 
+def _evaluate_one(pred_path: str, gt_dir: str, model_name: str, scenario_name: str) -> dict | None:
+    fname = os.path.basename(pred_path)
+    gt_path = os.path.join(gt_dir, fname)
+
+    if not os.path.exists(gt_path):
+        print(f"  [WARN] GT manquant pour {fname}, skip")
+        return None
+
+    pred_nii = nib.load(pred_path)
+    gt_nii = nib.load(gt_path)
+    spacing = pred_nii.header.get_zooms()[:3]
+
+    pred_data = pred_nii.get_fdata()
+    gt_data = gt_nii.get_fdata()
+
+    cldice = compute_cldice(pred_data, gt_data)
+    hd95 = compute_hd95(pred_data, gt_data, spacing=spacing)
+    nsd = compute_nsd(pred_data, gt_data, spacing=spacing)
+    betti0 = compute_betti0(pred_data, gt_data)
+
+    return {
+        "model": model_name,
+        "scenario": scenario_name,
+        "case": fname,
+        "cldice": cldice,
+        "hd95": hd95,
+        "nsd": nsd,
+        "betti0": betti0,
+    }
+
+
 def evaluate_predictions(
     pred_dir: str,
     gt_dir: str,
     model_name: str,
     scenario_name: str,
+    n_workers: int = 4,
 ) -> list[dict]:
     pred_files = sorted(glob.glob(os.path.join(pred_dir, "*.nii.gz")))
     results = []
 
-    for pred_path in pred_files:
-        fname = os.path.basename(pred_path)
-        gt_path = os.path.join(gt_dir, fname)
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
+        futures = {
+            pool.submit(_evaluate_one, p, gt_dir, model_name, scenario_name): p
+            for p in pred_files
+        }
+        with tqdm(as_completed(futures), total=len(futures), desc=f"{model_name} × {scenario_name}", unit="cas") as pbar:
+            for future in pbar:
+                result = future.result()
+                if result is not None:
+                    results.append(result)
+                    pbar.set_postfix(case=result["case"], CLDice=f"{result['cldice']:.4f}")
 
-        if not os.path.exists(gt_path):
-            print(f"  [WARN] GT manquant pour {fname}, skip")
-            continue
-
-        pred_nii = nib.load(pred_path)
-        gt_nii = nib.load(gt_path)
-        spacing = pred_nii.header.get_zooms()[:3]
-
-        pred_data = pred_nii.get_fdata()
-        gt_data = gt_nii.get_fdata()
-
-        cldice = compute_cldice(pred_data, gt_data)
-        hd95 = compute_hd95(pred_data, gt_data, spacing=spacing)
-        nsd = compute_nsd(pred_data, gt_data, spacing=spacing)
-        betti0 = compute_betti0(pred_data, gt_data)
-
-        results.append({
-            "model": model_name,
-            "scenario": scenario_name,
-            "case": fname,
-            "cldice": cldice,
-            "hd95": hd95,
-            "nsd": nsd,
-            "betti0": betti0,
-        })
-
-    return results
+    return sorted(results, key=lambda r: r["case"])
 
 
 def pairwise_wilcoxon(df: pd.DataFrame) -> pd.DataFrame:
