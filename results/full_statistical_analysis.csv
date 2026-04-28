@@ -1,0 +1,17 @@
+type,context,group_a,group_b,metric,n,mean_a,mean_b,delta,cohens_d,p_value,p_fdr,significant
+inter_model,GT_minus_test_full,Model_Minus_Fixed,Model_Star,cldice,15,0.7615,0.7479,-0.0135,-0.7073,0.0181,0.0414,True
+inter_model,GT_minus_test_full,Model_Minus_Fixed,Model_Star,hd95,15,4.4681,3.9992,-0.4689,-0.2229,0.3109,0.3826,False
+inter_model,GT_minus_test_full,Model_Minus_Fixed,Model_Star,nsd,15,0.8389,0.8545,0.0157,0.2831,0.3894,0.445,False
+inter_model,GT_minus_test_full,Model_Minus_Fixed,Model_Star,betti0,15,376.6667,376.8,0.1333,0.0012,0.8261,0.8261,False
+inter_model,GT_star,Model_Minus_Fixed,Model_Star,cldice,15,0.8787,0.877,-0.0017,-0.0866,0.7197,0.7677,False
+inter_model,GT_star,Model_Minus_Fixed,Model_Star,hd95,15,1.9002,1.4711,-0.4291,-0.3335,0.1097,0.1596,False
+inter_model,GT_star,Model_Minus_Fixed,Model_Star,nsd,15,0.9448,0.9536,0.0089,0.4133,0.1688,0.2251,False
+inter_model,GT_star,Model_Minus_Fixed,Model_Star,betti0,15,178.2667,258.1333,79.8667,1.1635,0.0023,0.0061,True
+inter_scenario,Model_Minus_Fixed,GT_minus_test_full,GT_star,cldice,15,0.7615,0.8787,0.1172,0.6218,0.0833,0.1333,False
+inter_scenario,Model_Minus_Fixed,GT_minus_test_full,GT_star,hd95,15,4.4681,1.9002,-2.5679,-0.6665,0.0004,0.0021,True
+inter_scenario,Model_Minus_Fixed,GT_minus_test_full,GT_star,nsd,15,0.8389,0.9448,0.1059,0.8717,0.0004,0.0021,True
+inter_scenario,Model_Minus_Fixed,GT_minus_test_full,GT_star,betti0,15,376.6667,178.2667,-198.4,-0.7591,0.0015,0.0048,True
+inter_scenario,Model_Star,GT_minus_test_full,GT_star,cldice,15,0.7479,0.877,0.1291,0.6689,0.0413,0.0826,False
+inter_scenario,Model_Star,GT_minus_test_full,GT_star,hd95,15,3.9992,1.4711,-2.5281,-0.552,0.0012,0.0048,True
+inter_scenario,Model_Star,GT_minus_test_full,GT_star,nsd,15,0.8545,0.9536,0.0991,0.9354,0.0001,0.0016,True
+inter_scenario,Model_Star,GT_minus_test_full,GT_star,betti0,15,376.8,258.1333,-118.6667,-0.4573,0.073,0.1298,False

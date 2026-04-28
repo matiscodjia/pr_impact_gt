@@ -1,0 +1,3 @@
+scenario,model_a,model_b,n_cases,mean_a,mean_b,delta,cohens_d,p_value,p_fdr,significant
+GT_minus_test_full,Model_Minus_Fixed,Model_Star,15,0.7615,0.7479,-0.0135,-0.7073,0.0181,0.0361,True
+GT_star,Model_Minus_Fixed,Model_Star,15,0.8787,0.877,-0.0017,-0.0866,0.7197,0.7197,False
