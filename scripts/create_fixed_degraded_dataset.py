@@ -31,6 +31,7 @@ import sys
 import nibabel as nib
 import numpy as np
 import yaml
+from tqdm import tqdm
 
 sys.path.insert(0, os.path.dirname(__file__))
 from degradations import apply_combined_degradation
@@ -112,43 +113,45 @@ def main():
 
     # ── imagesTr : liens symboliques ──
     images_tr = sorted(glob.glob(os.path.join(args.source_dir, "imagesTr", "*.nii.gz")))
-    for src in images_tr:
+    for src in tqdm(images_tr, desc="imagesTr (symlinks)", unit="cas"):
         _symlink(src, os.path.join(args.output_dir, "imagesTr", os.path.basename(src)))
-    print(f"\n  imagesTr : {len(images_tr)} liens créés")
+    print(f"  imagesTr : {len(images_tr)} liens créés")
 
     # ── labelsTr : dégradations fixes par cas ──
     labels_tr = sorted(glob.glob(os.path.join(args.source_dir, "labelsTr", "*.nii.gz")))
     delta_voxels = []
-    for idx, src in enumerate(labels_tr):
-        fname = os.path.basename(src)
-        dst = os.path.join(args.output_dir, "labelsTr", fname)
-        stats = _degrade_label(
-            src, dst,
-            morpho_prob=morpho["prob"],
-            morpho_max_radius=morpho["max_radius"],
-            omission_prob=omission["prob"],
-            omission_min_size=omission["min_size"],
-            seed=args.seed + idx,
-        )
-        delta = stats["before"] - stats["after"]
-        delta_voxels.append(delta)
-        if (idx + 1) % 10 == 0 or idx == len(labels_tr) - 1:
-            print(f"    {idx+1}/{len(labels_tr)} — {fname} "
-                  f"(Δ voxels = {delta:+d})")
+    n_degraded = 0
+    with tqdm(enumerate(labels_tr), total=len(labels_tr), desc="labelsTr (dégradation)", unit="cas") as pbar:
+        for idx, src in pbar:
+            fname = os.path.basename(src)
+            dst = os.path.join(args.output_dir, "labelsTr", fname)
+            stats = _degrade_label(
+                src, dst,
+                morpho_prob=morpho["prob"],
+                morpho_max_radius=morpho["max_radius"],
+                omission_prob=omission["prob"],
+                omission_min_size=omission["min_size"],
+                seed=args.seed + idx,
+            )
+            delta = stats["before"] - stats["after"]
+            delta_voxels.append(delta)
+            if delta != 0:
+                n_degraded += 1
+            pbar.set_postfix(case=fname, delta=f"{-delta:+d}", degraded=f"{n_degraded}/{idx+1}")
 
     if delta_voxels:
-        print(f"  labelsTr : {len(labels_tr)} labels dégradés | "
+        print(f"  labelsTr : {len(labels_tr)} labels | {n_degraded} effectivement dégradés | "
               f"Δ moyen = {np.mean(delta_voxels):+.0f} voxels/cas")
 
     # ── imagesTs : liens symboliques ──
     images_ts = sorted(glob.glob(os.path.join(args.source_dir, "imagesTs", "*.nii.gz")))
-    for src in images_ts:
+    for src in tqdm(images_ts, desc="imagesTs (symlinks)", unit="cas"):
         _symlink(src, os.path.join(args.output_dir, "imagesTs", os.path.basename(src)))
     print(f"  imagesTs : {len(images_ts)} liens créés")
 
     # ── labelsTs : liens symboliques (évaluation inchangée) ──
     labels_ts = sorted(glob.glob(os.path.join(args.source_dir, "labelsTs", "*.nii.gz")))
-    for src in labels_ts:
+    for src in tqdm(labels_ts, desc="labelsTs (symlinks)", unit="cas"):
         _symlink(src, os.path.join(args.output_dir, "labelsTs", os.path.basename(src)))
     print(f"  labelsTs : {len(labels_ts)} liens créés")
 

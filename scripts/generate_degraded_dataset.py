@@ -25,6 +25,7 @@ import os
 import nibabel as nib
 import numpy as np
 import yaml
+from tqdm import tqdm
 
 from degradations import (
     apply_combined_degradation,
@@ -69,25 +70,34 @@ def degrade_labels(
     print(f"  omission: prob={omission_prob}, min_size={omission_min_size}")
     print(f"  seed: {seed}")
 
-    for idx, lbl_path in enumerate(label_files):
-        np.random.seed(seed + idx)
-        fname = os.path.basename(lbl_path)
-        nii = nib.load(lbl_path)
-        data = nii.get_fdata().astype(np.float32)
+    n_degraded = 0
+    with tqdm(enumerate(label_files), total=len(label_files), unit="cas") as pbar:
+        for idx, lbl_path in pbar:
+            np.random.seed(seed + idx)
+            fname = os.path.basename(lbl_path)
+            nii = nib.load(lbl_path)
+            data = nii.get_fdata().astype(np.float32)
 
-        data_ch = data[np.newaxis, ...]
-        degraded = apply_combined_degradation(
-            data_ch,
-            morpho_prob=morpho_prob,
-            morpho_max_radius=morpho_max_radius,
-            omission_prob=omission_prob,
-            omission_min_size=omission_min_size,
-        )
+            before = int((data > 0).sum())
+            data_ch = data[np.newaxis, ...]
+            degraded = apply_combined_degradation(
+                data_ch,
+                morpho_prob=morpho_prob,
+                morpho_max_radius=morpho_max_radius,
+                omission_prob=omission_prob,
+                omission_min_size=omission_min_size,
+            )
+            after = int((degraded[0] > 0).sum())
+            delta = before - after
 
-        out_nii = nib.Nifti1Image(degraded[0], nii.affine, nii.header)
-        nib.save(out_nii, os.path.join(output_dir, fname))
+            if delta != 0:
+                n_degraded += 1
+            pbar.set_postfix(case=fname, delta=f"{-delta:+d}", degraded=f"{n_degraded}/{idx+1}")
 
-    print(f"  -> {len(label_files)} labels dégradés sauvegardés dans {output_dir}")
+            out_nii = nib.Nifti1Image(degraded[0], nii.affine, nii.header)
+            nib.save(out_nii, os.path.join(output_dir, fname))
+
+    print(f"  -> {len(label_files)} labels sauvegardés ({n_degraded} effectivement dégradés) dans {output_dir}")
 
 
 def main():
