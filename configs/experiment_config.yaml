@@ -63,11 +63,11 @@ evaluation:
     - name: "GT_star"
       description: "Évaluation sur GT propres"
       degradation: null
-    - name: "GT_minus_test"
-      description: "Évaluation sur GT de test dégradées avec les mêmes paramètres qu'à l'entraînement (stochastique)"
-      degradation:
-        morpho: {prob: 0.3, max_radius: 3}
-        omission: {prob: 0.2, min_size: 150}
+    # - name: "GT_minus_test"
+    #   description: "Évaluation sur GT de test dégradées avec les mêmes paramètres qu'à l'entraînement (stochastique)"
+    #   degradation:
+    #     morpho: {prob: 0.3, max_radius: 3}
+    #     omission: {prob: 0.2, min_size: 150}
     - name: "GT_minus_test_full"
       description: "Évaluation sur GT de test dégradées systématiquement (prob=1.0) — tous les cas dégradés"
       degradation:
