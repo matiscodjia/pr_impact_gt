@@ -244,6 +244,89 @@ def pairwise_wilcoxon(df: pd.DataFrame) -> pd.DataFrame:
     return stat_df.round(4)
 
 
+def noise_learning_test(
+    df: pd.DataFrame,
+    gt_clean: str = "GT_star",
+    gt_degraded: str = "GT_minus_test",
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Teste si un modèle a appris le bruit via la pénalité d'évaluation par cas.
+
+    Pénalité = CLDice(GT_star) - CLDice(GT_minus_test) par cas.
+    Un modèle dont les prédictions imitent les GT dégradés est moins pénalisé
+    quand l'évaluation se fait sur GT dégradés → pénalité systématiquement plus faible.
+
+    Returns
+    -------
+    summary_df : pénalité moyenne/std/médiane par modèle
+    test_df    : Wilcoxon apparié sur les pénalités entre modèles
+    """
+    models = sorted(df["model"].unique())
+
+    penalties: dict[str, pd.Series] = {}
+    for model in models:
+        star = (
+            df[(df["model"] == model) & (df["scenario"] == gt_clean)]
+            .set_index("case")["cldice"]
+        )
+        minus = (
+            df[(df["model"] == model) & (df["scenario"] == gt_degraded)]
+            .set_index("case")["cldice"]
+        )
+        common = star.index.intersection(minus.index)
+        if len(common) >= 5:
+            penalties[model] = star.loc[common] - minus.loc[common]
+
+    if len(penalties) < 2:
+        return pd.DataFrame(), pd.DataFrame()
+
+    summary_rows = [
+        {
+            "model": model,
+            "n_cases": len(pen),
+            "mean_penalty": round(float(pen.mean()), 4),
+            "std_penalty": round(float(pen.std(ddof=1)), 4),
+            "median_penalty": round(float(pen.median()), 4),
+        }
+        for model, pen in penalties.items()
+    ]
+
+    model_list = sorted(penalties.keys())
+    test_rows = []
+    for i, model_a in enumerate(model_list):
+        for model_b in model_list[i + 1:]:
+            a = penalties[model_a]
+            b = penalties[model_b]
+            common = a.index.intersection(b.index)
+            if len(common) < 5:
+                continue
+
+            a_vals = a.loc[common].values
+            b_vals = b.loc[common].values
+            diff = b_vals - a_vals  # positif = model_b plus pénalisé → model_a a plus appris le bruit
+
+            try:
+                _, p_value = wilcoxon(a_vals, b_vals)
+            except ValueError:
+                p_value = np.nan
+
+            std_diff = np.std(diff, ddof=1)
+            cohens_d = np.mean(diff) / std_diff if std_diff > 0 else np.nan
+
+            test_rows.append({
+                "model_a": model_a,
+                "model_b": model_b,
+                "n_cases": len(common),
+                "mean_penalty_a": round(float(np.mean(a_vals)), 4),
+                "mean_penalty_b": round(float(np.mean(b_vals)), 4),
+                "delta_penalty": round(float(np.mean(diff)), 4),
+                "cohens_d": round(float(cohens_d), 4) if not np.isnan(cohens_d) else None,
+                "p_value": round(float(p_value), 4) if not np.isnan(p_value) else None,
+                "significant": bool(p_value < 0.05) if not np.isnan(p_value) else False,
+            })
+
+    return pd.DataFrame(summary_rows), pd.DataFrame(test_rows)
+
+
 def generate_summary_plots(df: pd.DataFrame, output_dir: str) -> None:
     import matplotlib.pyplot as plt
     import seaborn as sns
@@ -316,6 +399,31 @@ def generate_summary_plots(df: pd.DataFrame, output_dir: str) -> None:
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "boxplots.png"), dpi=150)
     plt.close()
+
+    # ── Penalty plot — apprentissage du bruit ──
+    penalties_by_model: dict[str, np.ndarray] = {}
+    for model in df["model"].unique():
+        star = df[(df["model"] == model) & (df["scenario"] == "GT_star")].set_index("case")["cldice"]
+        minus = df[(df["model"] == model) & (df["scenario"] == "GT_minus_test")].set_index("case")["cldice"]
+        common = star.index.intersection(minus.index)
+        if len(common) > 0:
+            penalties_by_model[model] = (star.loc[common] - minus.loc[common]).values
+
+    if penalties_by_model:
+        sorted_models = sorted(penalties_by_model.keys())
+        _, ax = plt.subplots(figsize=(7, 5))
+        ax.boxplot(
+            [penalties_by_model[m] for m in sorted_models],
+            labels=sorted_models,
+            patch_artist=True,
+            boxprops=dict(facecolor="#e3f2fd"),
+        )
+        ax.axhline(0, color="gray", linestyle="--", linewidth=0.8)
+        ax.set_title("Pénalité par modèle (CLDice GT_star − GT_minus_test)\nUn modèle ayant appris le bruit a une pénalité plus faible")
+        ax.set_ylabel("Pénalité CLDice")
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, "penalty_noise_learning.png"), dpi=150)
+        plt.close()
 
     print(f"  Figures sauvegardées dans {output_dir}/")
 
@@ -413,6 +521,23 @@ def main():
         stat_df.to_csv(stat_path, index=False)
         print(stat_df.to_string(index=False))
         print(f"\nTests sauvegardés : {stat_path}")
+
+    # Test d'apprentissage du bruit
+    print(f"\n{'='*60}")
+    print("TEST D'APPRENTISSAGE DU BRUIT")
+    print("Pénalité = CLDice(GT_star) − CLDice(GT_minus_test) par cas")
+    print("Hypothèse : prédictions biaisées vers GT dégradé → pénalité plus faible")
+    print(f"{'='*60}")
+    penalty_summary, penalty_test = noise_learning_test(df)
+    if not penalty_summary.empty:
+        print("\nPénalité par modèle :")
+        print(penalty_summary.to_string(index=False))
+        if not penalty_test.empty:
+            print("\nComparaison des pénalités (Wilcoxon apparié) :")
+            print(penalty_test.to_string(index=False))
+            penalty_path = os.path.join(args.output, "noise_learning_test.csv")
+            penalty_test.to_csv(penalty_path, index=False)
+            print(f"\nTest sauvegardé : {penalty_path}")
 
     generate_summary_plots(df, os.path.join(args.output, "figures"))
 
