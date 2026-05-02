@@ -88,7 +88,7 @@ def compute_betti0(pred: np.ndarray, gt: np.ndarray) -> int:
     from scipy.ndimage import label
 
     _, n_pred = label(pred > 0.5)
-    _, n_gt = label(gt > 0.5)
+    _, n_gt = label(gt)
     return abs(n_pred - n_gt)
 
 
@@ -96,7 +96,7 @@ def compute_hd95(pred: np.ndarray, gt: np.ndarray, spacing: tuple = (1, 1, 1)) -
     from scipy.ndimage import distance_transform_edt
 
     pred_bool = pred > 0.5
-    gt_bool = gt > 0.5
+    gt_bool = gt
 
     if not pred_bool.any() or not gt_bool.any():
         return np.inf

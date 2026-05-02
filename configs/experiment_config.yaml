@@ -2,15 +2,11 @@
 # experiment_config.yaml — Configuration centralisée des expériences
 # ============================================================================
 
-# ── Dataset ──
+# ── Dataset source ──
 dataset:
   id: 100
   name: "Dataset100_PARSE"
-  fixed_id: 101
-  fixed_name: "Dataset101_PARSE_Fixed"
-  # Chemin vers les données PARSE brutes (structure: images/ labels/)
   raw_dir: "./data"
-  # Proportion train/val/test
   splits:
     train: 0.70
     val: 0.15
@@ -19,67 +15,77 @@ dataset:
 
 # ── nnU-Net training ──
 training:
-  # Configurations nnU-Net à entraîner (choisies après plan_and_preprocess)
   configurations: ["3d_fullres"]
-  # Folds pour la cross-validation (0-4 pour complète, "all" pour tout)
   folds: [0, 1, 2, 3, 4]
-  # Device (auto-détecté si non spécifié)
-  # device: "cuda"  # ou "mps" ou "cpu"
 
-# ── Dégradations ──
-degradations:
-  # Dégradation morphologique (érosion/dilatation)
-  morpho:
+# ── Datasets dégradés fixes ──
+# Chaque clé est l'ID nnU-Net cible (Dataset10X_PARSE_Fixed).
+# Les dégradations sont appliquées séquentiellement dans l'ordre de la liste.
+# Ajouter un type suffit à l'empiler — aucun autre fichier à modifier.
+fixed_datasets:
+  101:
+    name: "Dataset101_PARSE_MorphoOmission"
+    degradations:
+      - type: morpho
+        prob: 0.3
+        max_radius: 3
+      - type: omission
+        prob: 0.2
+        min_size: 150
+  102:
+    name: "Dataset102_PARSE_MorphoOmission_102"
+    degradations:
+      - type: morpho
+        prob: 1
+        max_radius: 3
+      - type: omission
+        prob: 1
+        min_size: 150
+
+# ── Dégradations stochastiques on-the-fly (nnUNetTrainerDegraded) ──
+# Même format que fixed_datasets[*].degradations — les types sont identiques.
+stochastic_degradations:
+  - type: morpho
     prob: 0.3
     max_radius: 3
-  # Omission de composantes connexes
-  omission:
+  - type: omission
     prob: 0.2
     min_size: 150
 
 # ── Grid search ──
 grid_search:
-  # Phase 1 : morpho seule
   morpho_grid:
     prob: [0.1, 0.2, 0.3, 0.5]
     max_radius: [1, 2, 3, 5]
-  # Phase 2 : omission seule
   omission_grid:
     prob: [0.1, 0.2, 0.3, 0.5]
     min_size: [50, 100, 200, 500]
-  # Phase 3 : top-N combinaisons des phases 1 et 2
   top_n_combos: 3
-  # Nombre d'époques réduit pour le grid search
   num_epochs: 250
-  # Fold unique pour accélérer
   fold: 0
 
 # ── Évaluation ──
 evaluation:
-  # Métriques à calculer
   metrics: ["CLDice", "HD95", "NSD", "Betti0"]
-  # Scénarios de cross-évaluation
   scenarios:
     - name: "GT_star"
       description: "Évaluation sur GT propres"
       degradation: null
-    # - name: "GT_minus_test"
-    #   description: "Évaluation sur GT de test dégradées avec les mêmes paramètres qu'à l'entraînement (stochastique)"
-    #   degradation:
-    #     morpho: {prob: 0.3, max_radius: 3}
-    #     omission: {prob: 0.2, min_size: 150}
     - name: "GT_minus_test_full"
-      description: "Évaluation sur GT de test dégradées systématiquement (prob=1.0) — tous les cas dégradés"
+      description: "Évaluation sur GT de test dégradées systématiquement (prob=1.0)"
       degradation:
-        morpho: {prob: 1.0, max_radius: 3}
-        omission: {prob: 1.0, min_size: 150}
+        - type: morpho
+          prob: 1.0
+          max_radius: 3
+        - type: omission
+          prob: 1.0
+          min_size: 150
 
 # ── Hardware profiles ──
 hardware:
   macos_mps:
     vram_gb: 24
     num_workers: 2
-    # nnU-Net ajuste auto mais on peut forcer un plan plus petit
     device: "mps"
   a40:
     vram_gb: 35

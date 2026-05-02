@@ -27,20 +27,13 @@ import numpy as np
 import yaml
 from tqdm import tqdm
 
-from degradations import (
-    apply_combined_degradation,
-    apply_morpho_degradation,
-    apply_omission_degradation,
-)
+from degradations import apply_degradation_pipeline
 
 
 def degrade_labels(
     labels_dir: str,
     output_dir: str,
-    morpho_prob: float = 1.0,
-    morpho_max_radius: int = 3,
-    omission_prob: float = 0.0,
-    omission_min_size: int = 150,
+    degradation_configs: list,
     seed: int = 42,
 ) -> None:
     """Génère des labels dégradés à partir d'un dossier de labels propres.
@@ -51,14 +44,8 @@ def degrade_labels(
         Chemin vers le dossier contenant les labels propres (.nii.gz).
     output_dir : str
         Chemin de sortie pour les labels dégradés.
-    morpho_prob : float
-        Probabilité de dégradation morphologique (1.0 = toujours).
-    morpho_max_radius : int
-        Rayon max pour l'érosion/dilatation.
-    omission_prob : float
-        Probabilité d'omission de composantes.
-    omission_min_size : int
-        Taille seuil pour les composantes à omettre.
+    degradation_configs : list[dict]
+        Pipeline de dégradations (voir ``apply_degradation_pipeline``).
     seed : int
         Graine aléatoire pour la reproductibilité.
     """
@@ -66,8 +53,9 @@ def degrade_labels(
 
     label_files = sorted(glob.glob(os.path.join(labels_dir, "*.nii.gz")))
     print(f"Dégradation de {len(label_files)} labels...")
-    print(f"  morpho: prob={morpho_prob}, max_radius={morpho_max_radius}")
-    print(f"  omission: prob={omission_prob}, min_size={omission_min_size}")
+    for i, d in enumerate(degradation_configs, 1):
+        params = {k: v for k, v in d.items() if k != "type"}
+        print(f"  {i}. {d['type']} — {params}")
     print(f"  seed: {seed}")
 
     n_degraded = 0
@@ -79,14 +67,7 @@ def degrade_labels(
             data = nii.get_fdata().astype(np.float32)
 
             before = int((data > 0).sum())
-            data_ch = data[np.newaxis, ...]
-            degraded = apply_combined_degradation(
-                data_ch,
-                morpho_prob=morpho_prob,
-                morpho_max_radius=morpho_max_radius,
-                omission_prob=omission_prob,
-                omission_min_size=omission_min_size,
-            )
+            degraded = apply_degradation_pipeline(data[np.newaxis, ...], degradation_configs)
             after = int((degraded[0] > 0).sum())
             delta = before - after
 
@@ -142,21 +123,12 @@ def main():
             print(f"\n[{name}] Pas de dégradation (GT*) — skip")
             continue
 
-        morpho = deg.get("morpho", {})
-        omission = deg.get("omission", {})
-
-        output_dir = os.path.join(
-            args.dataset_dir, f"labelsTs_{name}"
-        )
-
+        output_dir = os.path.join(args.dataset_dir, f"labelsTs_{name}")
         print(f"\n[{name}] Génération des labels dégradés...")
         degrade_labels(
             labels_dir=labels_ts,
             output_dir=output_dir,
-            morpho_prob=morpho.get("prob", 0.0),
-            morpho_max_radius=morpho.get("max_radius", 1),
-            omission_prob=omission.get("prob", 0.0),
-            omission_min_size=omission.get("min_size", 100),
+            degradation_configs=deg,
             seed=args.seed,
         )
 

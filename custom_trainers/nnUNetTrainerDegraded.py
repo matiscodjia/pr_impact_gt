@@ -5,9 +5,9 @@ stochastiques (morphologiques et/ou omission) sur les masques de
 segmentation à chaque itération d'entraînement, **avant** le calcul
 de la loss.
 
-L'objectif est d'entraîner un modèle robuste aux annotations
+L'objectif est d'entraîner un modèle sur des annotations
 imparfaites (Model_Minus) qui peut être comparé à un modèle entraîné
-sur des annotations propres (Model_Star, entraîné avec le trainer
+sur des annotations parfaites (Model_Star, entraîné avec le trainer
 standard ``nnUNetTrainer``).
 
 Usage
@@ -77,98 +77,80 @@ class nnUNetTrainerDegraded(nnUNetTrainer):
         super().__init__(
             plans, configuration, fold, dataset_json, device
         )
-        # ── Paramètres de dégradation par défaut ──
-        self.morpho_prob = 0.3
-        self.morpho_max_radius = 3
-        self.omission_prob = 0.2
-        self.omission_min_size = 150
+        # Pipeline de dégradations par défaut (morpho + omission)
+        self.degradation_pipeline = [
+            {"type": "morpho",   "prob": 0.3, "max_radius": 3},
+            {"type": "omission", "prob": 0.2, "min_size": 150},
+        ]
 
-        # Charger la config si elle existe
         config_path = os.path.join(os.getcwd(), "configs", "experiment_config.yaml")
         if os.path.exists(config_path):
             try:
                 with open(config_path, "r") as f:
                     config = yaml.safe_load(f)
-                    if "degradations" in config:
-                        self.morpho_prob = config["degradations"]["morpho"].get("prob", self.morpho_prob)
-                        self.morpho_max_radius = config["degradations"]["morpho"].get("max_radius", self.morpho_max_radius)
-                        self.omission_prob = config["degradations"]["omission"].get("prob", self.omission_prob)
-                        self.omission_min_size = config["degradations"]["omission"].get("min_size", self.omission_min_size)
-                    
-                    # Optionnel: réduire les époques pour debug global
+                    if "stochastic_degradations" in config:
+                        self.degradation_pipeline = config["stochastic_degradations"]
                     if os.environ.get("DEBUG_PIPELINE") == "1":
                         self.num_epochs = 2
                         self.print_to_log_file("DEBUG MODE: num_epochs set to 2")
             except Exception as e:
                 self.print_to_log_file(f"WARNING: Could not load config: {e}")
 
+        pipeline_summary = ", ".join(
+            f"{d['type']}(" + " ".join(f"{k}={v}" for k, v in d.items() if k != "type") + ")"
+            for d in self.degradation_pipeline
+        )
         self.print_to_log_file(
             f"\n{'='*60}\n"
             f"nnUNetTrainerDegraded initialized\n"
-            f"  morpho_prob={self.morpho_prob}, "
-            f"morpho_max_radius={self.morpho_max_radius}\n"
-            f"  omission_prob={self.omission_prob}, "
-            f"omission_min_size={self.omission_min_size}\n"
+            f"  pipeline: {pipeline_summary}\n"
             f"{'='*60}\n"
         )
 
+    def _apply_morpho(self, result: np.ndarray, cfg: dict) -> np.ndarray:
+        if np.random.rand() >= cfg["prob"]:
+            return result
+        binary_mask = result > 0
+        if not binary_mask.any():
+            return result
+        radius = np.random.randint(1, cfg["max_radius"] + 1)
+        mode = np.random.choice(["erode", "dilate"])
+        struct = generate_binary_structure(binary_mask.ndim, 1)
+        if mode == "erode":
+            new_mask = binary_erosion(binary_mask, structure=struct, iterations=radius)
+        else:
+            new_mask = binary_dilation(binary_mask, structure=struct, iterations=radius)
+        result = np.where(new_mask, result, 0).astype(result.dtype)
+        if mode == "dilate":
+            result[new_mask & (~binary_mask)] = 1
+        return result
+
+    def _apply_omission(self, result: np.ndarray, cfg: dict) -> np.ndarray:
+        if np.random.rand() >= cfg["prob"]:
+            return result
+        binary_mask = result > 0
+        if not binary_mask.any():
+            return result
+        labeled_array, num_features = label_cc(binary_mask)
+        if num_features <= 1:
+            return result
+        comp_sizes = np.bincount(labeled_array.ravel())
+        small_comps = np.where(
+            (comp_sizes[1:] > 0) & (comp_sizes[1:] < cfg["min_size"])
+        )[0] + 1
+        if len(small_comps) == 0:
+            return result
+        result[labeled_array == np.random.choice(small_comps)] = 0
+        return result
+
     def _degrade_segmentation(self, seg_np: np.ndarray) -> np.ndarray:
-        """Applique les dégradations sur un masque numpy.
-
-        Parameters
-        ----------
-        seg_np : np.ndarray
-            Masque de shape ``(*spatial_dims)`` avec des valeurs
-            entières (0 = fond, 1+ = classes).
-
-        Returns
-        -------
-        np.ndarray
-            Masque dégradé de même shape et dtype.
-        """
         result = seg_np.copy()
-
-        # ── Dégradation morphologique ──
-        if np.random.rand() < self.morpho_prob:
-            binary_mask = result > 0
-            if binary_mask.any():
-                radius = np.random.randint(1, self.morpho_max_radius + 1)
-                mode = np.random.choice(["erode", "dilate"])
-                struct = generate_binary_structure(binary_mask.ndim, 1)
-
-                if mode == "erode":
-                    new_mask = binary_erosion(
-                        binary_mask, structure=struct, iterations=radius
-                    )
-                else:
-                    new_mask = binary_dilation(
-                        binary_mask, structure=struct, iterations=radius
-                    )
-
-                # Préserver les classes originales là où le masque reste actif
-                result = np.where(new_mask, result, 0).astype(result.dtype)
-                # Pour la dilatation, les nouveaux voxels prennent la classe
-                # la plus proche (ici on simplifie : classe 1 pour binaire)
-                if mode == "dilate":
-                    dilated_only = new_mask & (~binary_mask)
-                    result[dilated_only] = 1
-
-        # ── Omission de composantes ──
-        if np.random.rand() < self.omission_prob:
-            binary_mask = result > 0
-            if binary_mask.any():
-                labeled_array, num_features = label_cc(binary_mask)
-                if num_features > 1:
-                    comp_sizes = np.bincount(labeled_array.ravel())
-                    small_comps = np.where(
-                        (comp_sizes[1:] > 0)
-                        & (comp_sizes[1:] < self.omission_min_size)
-                    )[0] + 1
-
-                    if len(small_comps) > 0:
-                        to_remove = np.random.choice(small_comps)
-                        result[labeled_array == to_remove] = 0
-
+        for cfg in self.degradation_pipeline:
+            dtype = cfg["type"]
+            method = getattr(self, f"_apply_{dtype}", None)
+            if method is None:
+                raise ValueError(f"Type de dégradation inconnu dans le trainer: '{dtype}'")
+            result = method(result, cfg)
         return result
 
     def train_step(self, batch: dict) -> dict:
@@ -241,8 +223,9 @@ class nnUNetTrainerDegradedMorphoOnly(nnUNetTrainerDegraded):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
                  device: torch.device = torch.device("cuda")):
         super().__init__(plans, configuration, fold, dataset_json, device)
-
-        self.omission_prob = 0.0
+        self.degradation_pipeline = [
+            {"type": "morpho", "prob": 0.3, "max_radius": 3},
+        ]
 
 
 class nnUNetTrainerDegradedOmissionOnly(nnUNetTrainerDegraded):
@@ -251,8 +234,9 @@ class nnUNetTrainerDegradedOmissionOnly(nnUNetTrainerDegraded):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
                  device: torch.device = torch.device("cuda")):
         super().__init__(plans, configuration, fold, dataset_json, device)
-
-        self.morpho_prob = 0.0
+        self.degradation_pipeline = [
+            {"type": "omission", "prob": 0.2, "min_size": 150},
+        ]
 
 
 class nnUNetTrainerDegradedMild(nnUNetTrainerDegraded):
@@ -261,11 +245,10 @@ class nnUNetTrainerDegradedMild(nnUNetTrainerDegraded):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
                  device: torch.device = torch.device("cuda")):
         super().__init__(plans, configuration, fold, dataset_json, device)
-
-        self.morpho_prob = 0.1
-        self.morpho_max_radius = 1
-        self.omission_prob = 0.1
-        self.omission_min_size = 50
+        self.degradation_pipeline = [
+            {"type": "morpho",   "prob": 0.1, "max_radius": 1},
+            {"type": "omission", "prob": 0.1, "min_size": 50},
+        ]
 
 
 class nnUNetTrainerDegradedSevere(nnUNetTrainerDegraded):
@@ -274,11 +257,10 @@ class nnUNetTrainerDegradedSevere(nnUNetTrainerDegraded):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
                  device: torch.device = torch.device("cuda")):
         super().__init__(plans, configuration, fold, dataset_json, device)
-
-        self.morpho_prob = 0.5
-        self.morpho_max_radius = 5
-        self.omission_prob = 0.5
-        self.omission_min_size = 500
+        self.degradation_pipeline = [
+            {"type": "morpho",   "prob": 0.5, "max_radius": 5},
+            {"type": "omission", "prob": 0.5, "min_size": 500},
+        ]
 
 
 # ── Variantes paramétriques pour grid search ──

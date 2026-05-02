@@ -144,37 +144,53 @@ def apply_omission_degradation(
     return result
 
 
-def apply_combined_degradation(
+_REGISTRY = {
+    "morpho": lambda seg, cfg: apply_morpho_degradation(
+        seg, prob=cfg["prob"], max_radius=cfg["max_radius"]
+    ),
+    "omission": lambda seg, cfg: apply_omission_degradation(
+        seg, prob=cfg["prob"], min_size=cfg["min_size"]
+    ),
+}
+
+
+def apply_degradation_pipeline(
     segmentation: np.ndarray,
-    morpho_prob: float = 0.3,
-    morpho_max_radius: int = 3,
-    omission_prob: float = 0.2,
-    omission_min_size: int = 150,
+    degradation_configs: list,
 ) -> np.ndarray:
-    """Applique séquentiellement les dégradations morpho puis omission.
+    """Applique séquentiellement une liste de dégradations.
 
     Parameters
     ----------
     segmentation : np.ndarray
         Masque de segmentation de shape ``(C, *spatial_dims)``.
-    morpho_prob : float
-        Probabilité de la dégradation morphologique.
-    morpho_max_radius : int
-        Rayon maximum pour la morphologie.
-    omission_prob : float
-        Probabilité de l'omission.
-    omission_min_size : int
-        Taille seuil pour l'omission.
+    degradation_configs : list[dict]
+        Liste ordonnée de configs, chaque dict ayant au minimum une clé
+        ``"type"`` (ex: ``"morpho"``, ``"omission"``) et les paramètres
+        spécifiques au type. Exemple ::
+
+            [
+                {"type": "morpho",   "prob": 0.3, "max_radius": 3},
+                {"type": "omission", "prob": 0.2, "min_size": 150},
+            ]
 
     Returns
     -------
     np.ndarray
-        Masque après les deux dégradations.
+        Masque après application de toutes les dégradations.
+
+    Raises
+    ------
+    ValueError
+        Si un type de dégradation est inconnu.
     """
-    result = apply_morpho_degradation(
-        segmentation, prob=morpho_prob, max_radius=morpho_max_radius
-    )
-    result = apply_omission_degradation(
-        result, prob=omission_prob, min_size=omission_min_size
-    )
+    result = segmentation
+    for cfg in degradation_configs:
+        dtype = cfg["type"]
+        if dtype not in _REGISTRY:
+            raise ValueError(
+                f"Type de dégradation inconnu: '{dtype}'. "
+                f"Disponibles: {sorted(_REGISTRY)}"
+            )
+        result = _REGISTRY[dtype](result, cfg)
     return result

@@ -1,25 +1,32 @@
 #!/usr/bin/env python3
-"""Crée Dataset101_PARSE_Fixed : mêmes images, labels d'entraînement dégradés fixes.
+"""Crée Dataset10{n}_PARSE_Fixed : mêmes images, labels d'entraînement dégradés fixes.
 
 Ce script génère un dataset nnU-Net avec :
 - imagesTr/imagesTs : liens symboliques vers Dataset100_PARSE (pas de duplication)
 - labelsTr         : dégradations déterministes (seed par cas), générées une seule fois
 - labelsTs         : liens symboliques vers Dataset100_PARSE/labelsTs (évaluation inchangée)
 
-Le modèle entraîné sur ce dataset (Model_Minus_Fixed, via nnUNetTrainer standard)
-apprend à partir d'un bruit d'annotation fixe — contrairement à Model_Minus_Stoch
-qui voit une dégradation différente à chaque epoch.
-
-Après exécution, lancer :
-    nnUNetv2_plan_and_preprocess -d 101 --verify_dataset_integrity
+Le pipeline de dégradations est lu depuis ``fixed_datasets[dataset_id]`` dans la config.
+Les dégradations sont stackées dans l'ordre de la liste — ajouter un type ne requiert
+aucune modification du script.
 
 Usage
 -----
+    # Dataset101 (morpho seule)
     python scripts/create_fixed_degraded_dataset.py \\
+        --dataset_id 101 \\
         --source_dir $nnUNet_raw/Dataset100_PARSE \\
         --output_dir $nnUNet_raw/Dataset101_PARSE_Fixed \\
-        --config configs/experiment_config.yaml \\
-        --seed 42
+        --config configs/experiment_config.yaml
+
+    # Dataset102 (morpho + omission)
+    python scripts/create_fixed_degraded_dataset.py \\
+        --dataset_id 102 \\
+        --source_dir $nnUNet_raw/Dataset100_PARSE \\
+        --output_dir $nnUNet_raw/Dataset102_PARSE_MorphoOmission
+
+Après exécution :
+    nnUNetv2_plan_and_preprocess -d <dataset_id> --verify_dataset_integrity
 """
 
 import argparse
@@ -34,7 +41,7 @@ import yaml
 from tqdm import tqdm
 
 sys.path.insert(0, os.path.dirname(__file__))
-from degradations import apply_combined_degradation
+from degradations import apply_degradation_pipeline
 
 
 def _symlink(src: str, dst: str) -> None:
@@ -46,10 +53,7 @@ def _symlink(src: str, dst: str) -> None:
 def _degrade_label(
     src_path: str,
     dst_path: str,
-    morpho_prob: float,
-    morpho_max_radius: int,
-    omission_prob: float,
-    omission_min_size: int,
+    degradation_configs: list,
     seed: int,
 ) -> dict:
     """Dégrade un label NIfTI avec un seed fixe, retourne des stats."""
@@ -58,13 +62,7 @@ def _degrade_label(
     data = nii.get_fdata().astype(np.float32)
 
     n_voxels_before = int((data > 0).sum())
-    degraded = apply_combined_degradation(
-        data[np.newaxis, ...],
-        morpho_prob=morpho_prob,
-        morpho_max_radius=morpho_max_radius,
-        omission_prob=omission_prob,
-        omission_min_size=omission_min_size,
-    )[0]
+    degraded = apply_degradation_pipeline(data[np.newaxis, ...], degradation_configs)[0]
     n_voxels_after = int((degraded > 0).sum())
 
     nib.save(nib.Nifti1Image(degraded, nii.affine, nii.header), dst_path)
@@ -73,7 +71,11 @@ def _degrade_label(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Crée Dataset101_PARSE_Fixed avec labels d'entraînement dégradés fixes"
+        description="Crée un DatasetXXX_PARSE_Fixed avec labels d'entraînement dégradés fixes"
+    )
+    parser.add_argument(
+        "--dataset_id", type=int, required=True,
+        help="ID du dataset cible tel que défini dans fixed_datasets de la config (ex: 101, 102)",
     )
     parser.add_argument(
         "--source_dir", required=True,
@@ -99,13 +101,23 @@ def main():
     with open(args.config) as f:
         config = yaml.safe_load(f)
 
-    morpho = config["degradations"]["morpho"]
-    omission = config["degradations"]["omission"]
+    fixed_datasets = config.get("fixed_datasets", {})
+    if args.dataset_id not in fixed_datasets:
+        available = sorted(fixed_datasets.keys())
+        print(f"ERREUR: dataset_id={args.dataset_id} absent de fixed_datasets. Disponibles: {available}")
+        sys.exit(1)
+
+    dataset_cfg = fixed_datasets[args.dataset_id]
+    degradation_configs = dataset_cfg["degradations"]
+    fixed_id = args.dataset_id
 
     print(f"Source  : {args.source_dir}")
     print(f"Sortie  : {args.output_dir}")
-    print(f"Morpho  : prob={morpho['prob']}, max_radius={morpho['max_radius']}")
-    print(f"Omission: prob={omission['prob']}, min_size={omission['min_size']}")
+    print(f"Dataset : {dataset_cfg.get('name', f'Dataset{fixed_id:03d}')}")
+    print(f"Pipeline de dégradations ({len(degradation_configs)} étape(s)) :")
+    for i, d in enumerate(degradation_configs, 1):
+        params = {k: v for k, v in d.items() if k != "type"}
+        print(f"  {i}. {d['type']} — {params}")
     print(f"Seed    : {args.seed} (+ index par cas)")
 
     for subdir in ("imagesTr", "labelsTr", "imagesTs", "labelsTs"):
@@ -127,10 +139,7 @@ def main():
             dst = os.path.join(args.output_dir, "labelsTr", fname)
             stats = _degrade_label(
                 src, dst,
-                morpho_prob=morpho["prob"],
-                morpho_max_radius=morpho["max_radius"],
-                omission_prob=omission["prob"],
-                omission_min_size=omission["min_size"],
+                degradation_configs=degradation_configs,
                 seed=args.seed + idx,
             )
             delta = stats["before"] - stats["after"]
@@ -141,7 +150,7 @@ def main():
 
     if delta_voxels:
         print(f"  labelsTr : {len(labels_tr)} labels | {n_degraded} effectivement dégradés | "
-              f"Δ moyen = {np.mean(delta_voxels):+.0f} voxels/cas")
+              f"Delta moyen = {np.mean(delta_voxels):+.0f} voxels/cas")
 
     # ── imagesTs : liens symboliques ──
     images_ts = sorted(glob.glob(os.path.join(args.source_dir, "imagesTs", "*.nii.gz")))
@@ -159,13 +168,13 @@ def main():
     with open(os.path.join(args.source_dir, "dataset.json")) as f:
         dataset_json = json.load(f)
 
-    fixed_id = config["dataset"].get("fixed_id", 101)
-    dataset_json["name"] = f"Dataset{fixed_id:03d}_PARSE_Fixed"
+    dataset_json["name"] = dataset_cfg.get("name", f"Dataset{fixed_id:03d}_PARSE_Fixed")
+    pipeline_summary = " | ".join(
+        f"{d['type']} " + " ".join(f"{k}={v}" for k, v in d.items() if k != "type")
+        for d in degradation_configs
+    )
     dataset_json["description"] = (
-        "PARSE with fixed degraded training labels — "
-        f"morpho prob={morpho['prob']} r={morpho['max_radius']}, "
-        f"omission prob={omission['prob']} s={omission['min_size']}, "
-        f"seed={args.seed}"
+        f"PARSE with fixed degraded training labels — {pipeline_summary} — seed={args.seed}"
     )
     with open(os.path.join(args.output_dir, "dataset.json"), "w") as f:
         json.dump(dataset_json, f, indent=2)
