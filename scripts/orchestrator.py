@@ -111,15 +111,38 @@ def results_fold_dir(nnunet_results: str, dataset: int, trainer: str, cfg: str, 
     return os.path.join(base[0], f"{trainer}__{PLANS}__{cfg}", f"fold_{fold}")
 
 
-def fold_state(fold_dir: str | None) -> str:
-    """``done`` | ``resumable`` | ``fresh`` selon les checkpoints présents."""
+def _progress_epoch(fold_dir: str) -> int:
+    """Dernière epoch atteinte d'après les training_log (−1 si aucun)."""
+    last = -1
+    for log in glob.glob(os.path.join(fold_dir, "training_log_*.txt")):
+        try:
+            with open(log, errors="ignore") as f:
+                for line in f:
+                    m = _EPOCH_RE.search(line)
+                    if m:
+                        last = max(last, int(m.group(1)))
+        except OSError:
+            pass
+    return last
+
+
+def fold_state(fold_dir: str | None, expected_epochs: int | None = None) -> str:
+    """``done`` | ``resumable`` | ``fresh`` selon les checkpoints ET le budget.
+
+    Un run avec ``checkpoint_final`` n'est ``done`` que s'il a réellement atteint
+    ``expected_epochs`` : un run court (ex. ``--debug``) ou un budget revu à la
+    hausse n'est pas pris pour terminé — il est repris et prolongé via ``--c``
+    (les époques déjà faites sont conservées).
+    """
     if fold_dir is None:
         return "fresh"
-    final = os.path.join(fold_dir, "checkpoint_final.pth")
-    val = os.path.join(fold_dir, "validation")
-    if os.path.exists(final) and os.path.isdir(val):
+    has_final = os.path.exists(os.path.join(fold_dir, "checkpoint_final.pth"))
+    has_latest = os.path.exists(os.path.join(fold_dir, "checkpoint_latest.pth"))
+    has_val = os.path.isdir(os.path.join(fold_dir, "validation"))
+    reached = expected_epochs is None or (_progress_epoch(fold_dir) + 1) >= expected_epochs
+    if has_final and has_val and reached:
         return "done"
-    if os.path.exists(os.path.join(fold_dir, "checkpoint_latest.pth")):
+    if has_final or has_latest:
         return "resumable"
     return "fresh"
 
@@ -236,7 +259,7 @@ def train_unit(dataset, trainer, fold, cfg, device, fold_dir, max_attempts, back
     """Entraîne une unité, reprise auto, retry/back-off. Retourne l'état final."""
     rc = -1
     for attempt in range(1, max_attempts + 1):
-        state = fold_state(fold_dir)
+        state = fold_state(fold_dir, total_epochs)
         if state == "done":
             return "done", 0, None
         resume = state == "resumable"
@@ -387,8 +410,9 @@ def main():
             break
         uid = unit_id(m["dataset_id"], m["trainer"], fold)
         fd = results_fold_dir(nnunet_results, m["dataset_id"], m["trainer"], cfg, fold)
+        total = expected_epochs(config, m["trainer"], args.debug)
 
-        if fold_state(fd) == "done":
+        if fold_state(fd, total) == "done":
             ledger["units"][uid] = {**ledger["units"].get(uid, {}),
                 "dataset": m["dataset_id"], "trainer": m["trainer"], "fold": fold,
                 "model": m["name"], "state": "done", "updated_at": _now()}
@@ -404,7 +428,6 @@ def main():
         ledger["units"][uid] = u
         save_ledger(args.results_dir, ledger)
 
-        total = expected_epochs(config, m["trainer"], args.debug)
         log_path = os.path.join(args.results_dir, "logs", f"{uid}.log")
         state, rc, err = train_unit(
             m["dataset_id"], m["trainer"], fold, cfg, device, fd,
