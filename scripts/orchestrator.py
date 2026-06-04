@@ -222,14 +222,20 @@ def run_streamed(cmd, log_path, total_epochs, label, show_progress) -> int:
     apparaissent à l'écran.
     """
     os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
+    # PYTHONUNBUFFERED=1 : nnUNet (Python) flushe stdout à chaque ligne au lieu de
+    # bufferiser par blocs vers le pipe → la barre avance en temps réel.
+    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True, bufsize=1)
+                            text=True, bufsize=1, env=env)
     bar = tqdm(total=total_epochs, desc=label, unit="ep", leave=False,
                dynamic_ncols=True, disable=not show_progress)
     last_dice = None
     with open(log_path, "a") as log:
-        for line in proc.stdout:
+        # readline (et non `for line in proc.stdout`) pour éviter le read-ahead
+        # qui retiendrait les lignes côté parent.
+        for line in iter(proc.stdout.readline, ""):
             log.write(line)
+            log.flush()
             me = _EPOCH_RE.search(line)
             if me:
                 ep = int(me.group(1))
@@ -246,6 +252,7 @@ def run_streamed(cmd, log_path, total_epochs, label, show_progress) -> int:
                 continue
             if show_progress and _ALERT_RE.search(line):
                 tqdm.write(f"  ⚠ {line.rstrip()}")
+    proc.stdout.close()
     proc.wait()
     if total_epochs and proc.returncode == 0:
         bar.n = total_epochs
