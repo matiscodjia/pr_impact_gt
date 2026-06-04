@@ -403,47 +403,55 @@ def plot_stochastic_robustness(df: pd.DataFrame, output_dir: str) -> None:
 def statistical_comparison(df: pd.DataFrame, output_dir: str) -> None:
     """Tests de Wilcoxon par paires de modèles, FDR Benjamini-Hochberg, Cohen's d.
 
-    Ce tableau est la base statistique de tous les outcomes comparatifs.
+    Calculé sur CLDice (↑) et HD95 mm (↓, distance de Hausdorff 95e percentile).
     """
     os.makedirs(output_dir, exist_ok=True)
 
+    metrics = ["cldice", "hd95"]
     models = sorted(df["model"].unique())
     scenarios = sorted(df["scenario"].unique())
     rows = []
 
-    for scenario in scenarios:
-        sc_df = df[df["scenario"] == scenario]
-        for i, model_a in enumerate(models):
-            for model_b in models[i+1:]:
-                a_vals = sc_df[sc_df["model"] == model_a].set_index("case")["cldice"]
-                b_vals = sc_df[sc_df["model"] == model_b].set_index("case")["cldice"]
-                common = a_vals.index.intersection(b_vals.index)
-                if len(common) < 5:
-                    continue
+    for metric in metrics:
+        for scenario in scenarios:
+            sc_df = df[df["scenario"] == scenario]
+            for i, model_a in enumerate(models):
+                for model_b in models[i+1:]:
+                    a_vals = sc_df[sc_df["model"] == model_a].set_index("case")[metric]
+                    b_vals = sc_df[sc_df["model"] == model_b].set_index("case")[metric]
+                    common = a_vals.index.intersection(b_vals.index)
+                    if len(common) < 5:
+                        continue
 
-                a = a_vals.loc[common].values
-                b = b_vals.loc[common].values
-                diff = b - a
-                std_diff = np.std(diff, ddof=1)
+                    a = a_vals.loc[common].values
+                    b = b_vals.loc[common].values
+                    if metric == "hd95":
+                        mask = np.isfinite(a) & np.isfinite(b)
+                        a, b = a[mask], b[mask]
+                        if len(a) < 5:
+                            continue
+                    diff = b - a
+                    std_diff = np.std(diff, ddof=1)
 
-                try:
-                    _, p = wilcoxon(a, b)
-                except ValueError:
-                    p = np.nan
+                    try:
+                        _, p = wilcoxon(a, b)
+                    except ValueError:
+                        p = np.nan
 
-                cohens_d = float(np.mean(diff) / std_diff) if std_diff > 0 else np.nan
+                    cohens_d = float(np.mean(diff) / std_diff) if std_diff > 0 else np.nan
 
-                rows.append({
-                    "scenario": scenario,
-                    "model_a": model_a,
-                    "model_b": model_b,
-                    "n_cases": len(common),
-                    "mean_a": round(float(np.mean(a)), 4),
-                    "mean_b": round(float(np.mean(b)), 4),
-                    "delta_b_minus_a": round(float(np.mean(diff)), 4),
-                    "cohens_d": round(cohens_d, 3) if not np.isnan(cohens_d) else None,
-                    "p_raw": round(float(p), 4) if not np.isnan(p) else None,
-                })
+                    rows.append({
+                        "metric": metric,
+                        "scenario": scenario,
+                        "model_a": model_a,
+                        "model_b": model_b,
+                        "n_cases": len(a),
+                        "mean_a": round(float(np.mean(a)), 4),
+                        "mean_b": round(float(np.mean(b)), 4),
+                        "delta_b_minus_a": round(float(np.mean(diff)), 4),
+                        "cohens_d": round(cohens_d, 3) if not np.isnan(cohens_d) else None,
+                        "p_raw": round(float(p), 4) if not np.isnan(p) else None,
+                    })
 
     if not rows:
         print("  Pas assez de données pour les tests statistiques.")
@@ -514,23 +522,23 @@ def plot_grid_search_heatmaps(df: pd.DataFrame, output_dir: str) -> None:
     phase2 = df[df["phase"] == 2]
     if not phase2.empty:
         probs = sorted(phase2["omission_prob"].unique())
-        sizes = sorted(phase2["omission_min_size"].unique())
-        matrix = np.zeros((len(sizes), len(probs)))
+        radii = sorted(phase2["omission_radius"].unique())
+        matrix = np.zeros((len(radii), len(probs)))
         for _, row in phase2.iterrows():
             pi = probs.index(row["omission_prob"])
-            si = sizes.index(row["omission_min_size"])
-            matrix[si, pi] = row["dice_star"]
+            ri = radii.index(row["omission_radius"])
+            matrix[ri, pi] = row["dice_star"]
 
         fig, ax = plt.subplots(figsize=(8, 5))
         im = ax.imshow(matrix, cmap="RdYlGn", aspect="auto", vmin=0.3, vmax=0.9)
         ax.set_xticks(range(len(probs)))
         ax.set_xticklabels([f"{p:.1f}" for p in probs])
-        ax.set_yticks(range(len(sizes)))
-        ax.set_yticklabels([str(s) for s in sizes])
+        ax.set_yticks(range(len(radii)))
+        ax.set_yticklabels([str(r) for r in radii])
         ax.set_xlabel("Probabilité omission")
-        ax.set_ylabel("Taille min (voxels)")
-        ax.set_title("Phase 2 — Omission seule — Dice sur GT*\n(Outcome 2 & 5 : seuils + impact omission)")
-        for i in range(len(sizes)):
+        ax.set_ylabel("Rayon d'ouverture (voxels)")
+        ax.set_title("Phase 2 — Omission seule — Dice sur GT*\n(Outcome 2 & 5 : rayon + impact omission)")
+        for i in range(len(radii)):
             for j in range(len(probs)):
                 ax.text(j, i, f"{matrix[i, j]:.3f}", ha="center", va="center",
                         color="white" if matrix[i, j] < 0.55 else "black",

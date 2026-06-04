@@ -17,6 +17,38 @@ dataset:
 training:
   configurations: ["3d_fullres"]
   folds: [0, 1, 2, 3, 4]
+  # Schedule court fixe (validé par la courbe de convergence, cf. plot_convergence.py).
+  # ~4x plus rapide que le défaut nnU-Net (1000) ; lu par nnUNetTrainerDegraded et
+  # appliqué à nnUNetTrainer250 (Model_Star / Model_Minus_Fixed).
+  num_epochs: 250
+
+# ── Matrice expérimentale (consommée par orchestrator.py) ──
+# Un modèle = (trainer nnU-Net, dataset source). tier = priorité d'exécution
+# (A traité avant B avant C). L'orchestrateur entrelace les folds au sein d'un tier
+# pour obtenir un résultat comparatif complet au plus tôt, puis l'affiner.
+experiment:
+  models:
+    - name: Model_Star
+      trainer: nnUNetTrainer250
+      dataset_id: 100
+      tier: A
+    - name: Model_Minus_Stoch
+      trainer: nnUNetTrainerDegraded
+      dataset_id: 100
+      tier: A
+    - name: Model_Minus_Fixed
+      trainer: nnUNetTrainer250
+      dataset_id: 101
+      tier: A
+    # Tier C — spécificité de la robustesse (outcome 7), activé en phase P3.
+    - name: Model_Minus_MorphoOnly
+      trainer: nnUNetTrainerDegradedMorphoOnly
+      dataset_id: 100
+      tier: C
+    - name: Model_Minus_OmissionOnly
+      trainer: nnUNetTrainerDegradedOmissionOnly
+      dataset_id: 100
+      tier: C
 
 # ── Datasets dégradés fixes ──
 # Chaque clé est l'ID nnU-Net cible (Dataset10X_PARSE_Fixed).
@@ -31,7 +63,7 @@ fixed_datasets:
         max_radius: 3
       - type: omission
         prob: 0.2
-        min_size: 150
+        radius: 2
   102:
     name: "Dataset102_PARSE_MorphoOmission_102"
     degradations:
@@ -40,7 +72,7 @@ fixed_datasets:
         max_radius: 3
       - type: omission
         prob: 1
-        min_size: 150
+        radius: 2
 
 # ── Dégradations stochastiques on-the-fly (nnUNetTrainerDegraded) ──
 # Même format que fixed_datasets[*].degradations — les types sont identiques.
@@ -50,7 +82,20 @@ stochastic_degradations:
     max_radius: 3
   - type: omission
     prob: 0.2
-    min_size: 150
+    radius: 2
+
+# ── Calibration du schedule (choix de num_epochs) ──
+# Un run long UNIQUE sur 1 fold, avec snapshots de checkpoints aux jalons.
+# Chaque snapshot est évalué en out-of-fold sur clDice + Betti0 (TOPOLOGIE, qui
+# converge plus tard que le Dice de région) → courbe + recommandation.
+# cf. scripts/calibrate.py et orchestrator.py --calibrate.
+calibration:
+  budget: 1000                                  # epochs du run de calibration (généreux)
+  milestones: [200, 300, 400, 500, 600, 800, 1000]
+  trainer: nnUNetTrainerCalib                   # ...Degraded pour calibrer Minus_Stoch
+  dataset_id: 100
+  fold: 0
+  plateau_tol: 0.01                             # plateau = clDice ≥ (1-tol)·max
 
 # ── Grid search ──
 grid_search:
@@ -59,9 +104,10 @@ grid_search:
     max_radius: [1, 2, 3, 5]
   omission_grid:
     prob: [0.1, 0.2, 0.3, 0.5]
-    min_size: [50, 100, 200, 500]
+    radius: [1, 2, 3]
   top_n_combos: 3
-  num_epochs: 250
+  # Comparaison relative (un seul fold) → schedule plus court que les modèles principaux.
+  num_epochs: 150
   fold: 0
 
 # ── Évaluation ──
@@ -71,7 +117,7 @@ evaluation:
     - name: "GT_star"
       description: "Évaluation sur GT propres"
       degradation: null
-    - name: "GT_minus_test_full"
+    - name: "GT_minus_test"
       description: "Évaluation sur GT de test dégradées systématiquement (prob=1.0)"
       degradation:
         - type: morpho
@@ -79,7 +125,7 @@ evaluation:
           max_radius: 3
         - type: omission
           prob: 1.0
-          min_size: 150
+          radius: 2
 
 # ── Hardware profiles ──
 hardware:

@@ -85,10 +85,14 @@ def compute_nsd(pred: np.ndarray, gt: np.ndarray, spacing: tuple = (1, 1, 1), to
 
 
 def compute_betti0(pred: np.ndarray, gt: np.ndarray) -> int:
-    from scipy.ndimage import label
+    from scipy.ndimage import generate_binary_structure, label
 
-    _, n_pred = label(pred > 0.5)
-    _, n_gt = label(gt)
+    # Connectivité 26 explicite : le défaut scipy (structure=None -> connectivité 6,
+    # faces uniquement) fragmente un arbre vasculaire fin en dizaines/centaines de
+    # composantes parasites et gonfle artificiellement le Betti0.
+    struct = generate_binary_structure(3, 3)
+    _, n_pred = label(pred > 0.5, structure=struct)
+    _, n_gt = label(gt > 0.5, structure=struct)
     return abs(n_pred - n_gt)
 
 
@@ -96,7 +100,7 @@ def compute_hd95(pred: np.ndarray, gt: np.ndarray, spacing: tuple = (1, 1, 1)) -
     from scipy.ndimage import distance_transform_edt
 
     pred_bool = pred > 0.5
-    gt_bool = gt
+    gt_bool = gt > 0.5
 
     if not pred_bool.any() or not gt_bool.any():
         return np.inf
@@ -164,84 +168,96 @@ def evaluate_predictions(
     return sorted(results, key=lambda r: r["case"])
 
 
-def pairwise_wilcoxon(df: pd.DataFrame) -> pd.DataFrame:
-    """Tests de Wilcoxon par paires de modèles pour chaque scénario GT.
+def pairwise_wilcoxon(df: pd.DataFrame, metrics: tuple[str, ...] = ("cldice", "hd95")) -> pd.DataFrame:
+    """Tests de Wilcoxon appariés, comparaisons pré-spécifiées (p brut).
 
-    Inclut la taille d'effet (Cohen's d apparié) et la correction FDR
-    de Benjamini-Hochberg sur l'ensemble des comparaisons.
+    Pour chaque métrique de `metrics`, calcule deux familles de tests :
+      - inter-modèles  : même scénario, modèles différents (différence des modèles)
+      - inter-scénarios: même modèle, GT* vs GT_minus (pénalité d'évaluation)
+
+    Pas de correction multiple : 2 tests par famille, pré-spécifiés a priori
+    par le design expérimental (cf. analysis_methods.md).
 
     Returns
     -------
     pd.DataFrame
-        Colonnes : scenario, model_a, model_b, mean_a, mean_b,
-                   delta, cohens_d, p_value, p_fdr, significant
+        Colonnes : metric, comparison, context, group_a, group_b,
+                   n_cases, mean_a, mean_b, delta, cohens_d, p_value, significant
     """
     models = sorted(df["model"].unique())
     scenarios = sorted(df["scenario"].unique())
     rows = []
 
-    for scenario in scenarios:
-        sc_df = df[df["scenario"] == scenario]
-        for i, model_a in enumerate(models):
-            for model_b in models[i+1:]:
-                a_vals = (
-                    sc_df[sc_df["model"] == model_a]
-                    .set_index("case")["cldice"]
-                )
-                b_vals = (
-                    sc_df[sc_df["model"] == model_b]
-                    .set_index("case")["cldice"]
-                )
-                # Garder les cas communs pour le test apparié
-                common = a_vals.index.intersection(b_vals.index)
-                if len(common) < 5:
-                    continue
+    for metric in metrics:
+        # ── Inter-modèles : même scénario, modèles différents ──
+        for scenario in scenarios:
+            sc_df = df[df["scenario"] == scenario]
+            for i, model_a in enumerate(models):
+                for model_b in models[i+1:]:
+                    a_vals = sc_df[sc_df["model"] == model_a].set_index("case")[metric]
+                    b_vals = sc_df[sc_df["model"] == model_b].set_index("case")[metric]
+                    rows.append(_paired_row(
+                        metric=metric, comparison="inter_model", context=scenario,
+                        group_a=model_a, group_b=model_b, a_vals=a_vals, b_vals=b_vals,
+                    ))
 
-                a = a_vals.loc[common].values
-                b = b_vals.loc[common].values
-                diff = b - a
+        # ── Inter-scénarios : même modèle, scénarios différents ──
+        for model in models:
+            m_df = df[df["model"] == model]
+            for i, sc_a in enumerate(scenarios):
+                for sc_b in scenarios[i+1:]:
+                    a_vals = m_df[m_df["scenario"] == sc_a].set_index("case")[metric]
+                    b_vals = m_df[m_df["scenario"] == sc_b].set_index("case")[metric]
+                    rows.append(_paired_row(
+                        metric=metric, comparison="inter_scenario", context=model,
+                        group_a=sc_a, group_b=sc_b, a_vals=a_vals, b_vals=b_vals,
+                    ))
 
-                try:
-                    _, p_value = wilcoxon(a, b)
-                except ValueError:
-                    p_value = np.nan
-
-                # Cohen's d apparié
-                std_diff = np.std(diff, ddof=1)
-                cohens_d = np.mean(diff) / std_diff if std_diff > 0 else np.nan
-
-                rows.append({
-                    "scenario": scenario,
-                    "model_a": model_a,
-                    "model_b": model_b,
-                    "n_cases": len(common),
-                    "mean_a": float(np.mean(a)),
-                    "mean_b": float(np.mean(b)),
-                    "delta": float(np.mean(diff)),
-                    "cohens_d": float(cohens_d) if not np.isnan(cohens_d) else None,
-                    "p_value": float(p_value) if not np.isnan(p_value) else None,
-                })
-
+    rows = [r for r in rows if r is not None]
     if not rows:
         return pd.DataFrame()
 
     stat_df = pd.DataFrame(rows)
-
-    # Correction FDR Benjamini-Hochberg
-    p_vals = stat_df["p_value"].fillna(1.0).values
-    n = len(p_vals)
-    sorted_idx = np.argsort(p_vals)
-    p_fdr = np.empty(n)
-    p_fdr[sorted_idx] = p_vals[sorted_idx] * n / (np.arange(n) + 1)
-    # Correction monotone
-    for k in range(n - 2, -1, -1):
-        p_fdr[sorted_idx[k]] = min(p_fdr[sorted_idx[k]], p_fdr[sorted_idx[k + 1]])
-    p_fdr = np.clip(p_fdr, 0, 1)
-
-    stat_df["p_fdr"] = p_fdr
-    stat_df["significant"] = stat_df["p_fdr"] < 0.05
-
+    stat_df["significant"] = stat_df["p_value"] < 0.05
     return stat_df.round(4)
+
+
+def _paired_row(metric, comparison, context, group_a, group_b, a_vals, b_vals):
+    """Wilcoxon apparié entre deux séries indexées par cas. None si n < 5."""
+    common = a_vals.index.intersection(b_vals.index)
+    if len(common) < 5:
+        return None
+
+    a = a_vals.loc[common].values
+    b = b_vals.loc[common].values
+    if metric == "hd95":
+        mask = np.isfinite(a) & np.isfinite(b)
+        a, b = a[mask], b[mask]
+        if len(a) < 5:
+            return None
+    diff = b - a
+
+    try:
+        _, p_value = wilcoxon(a, b)
+    except ValueError:
+        p_value = np.nan
+
+    std_diff = np.std(diff, ddof=1)
+    cohens_d = np.mean(diff) / std_diff if std_diff > 0 else np.nan
+
+    return {
+        "metric": metric,
+        "comparison": comparison,
+        "context": context,
+        "group_a": group_a,
+        "group_b": group_b,
+        "n_cases": len(a),
+        "mean_a": float(np.mean(a)),
+        "mean_b": float(np.mean(b)),
+        "delta": float(np.mean(diff)),
+        "cohens_d": float(cohens_d) if not np.isnan(cohens_d) else None,
+        "p_value": float(p_value) if not np.isnan(p_value) else None,
+    }
 
 
 def noise_learning_test(

@@ -107,14 +107,17 @@ def main():
     with open(args.config) as f:
         config = yaml.safe_load(f)
 
-    # Dossier des labels de test
-    labels_ts = os.path.join(args.dataset_dir, "labelsTs")
-    if not os.path.isdir(labels_ts):
-        print(f"ERREUR: {labels_ts} n'existe pas.")
-        print("Assurez-vous d'avoir copié les labels de test lors de la conversion.")
+    # Évaluation out-of-fold : on dégrade AUSSI les labels d'entraînement (les cas
+    # prédits en validation par les folds), pas seulement le test set. Un dossier
+    # labels{Tr,Ts}_<scenario> est produit pour chaque split présent.
+    splits = [s for s in ("labelsTr", "labelsTs")
+              if os.path.isdir(os.path.join(args.dataset_dir, s))]
+    if not splits:
+        print(f"ERREUR: ni labelsTr ni labelsTs dans {args.dataset_dir}.")
+        print("Assurez-vous d'avoir copié les labels lors de la conversion.")
         return
 
-    # Générer un dossier de labels dégradés pour chaque scénario
+    # Générer un dossier de labels dégradés pour chaque scénario × split
     for scenario in config["evaluation"]["scenarios"]:
         name = scenario["name"]
         deg = scenario.get("degradation")
@@ -123,14 +126,15 @@ def main():
             print(f"\n[{name}] Pas de dégradation (GT*) — skip")
             continue
 
-        output_dir = os.path.join(args.dataset_dir, f"labelsTs_{name}")
-        print(f"\n[{name}] Génération des labels dégradés...")
-        degrade_labels(
-            labels_dir=labels_ts,
-            output_dir=output_dir,
-            degradation_configs=deg,
-            seed=args.seed,
-        )
+        for split in splits:
+            output_dir = os.path.join(args.dataset_dir, f"{split}_{name}")
+            print(f"\n[{name}/{split}] Génération des labels dégradés...")
+            degrade_labels(
+                labels_dir=os.path.join(args.dataset_dir, split),
+                output_dir=output_dir,
+                degradation_configs=deg,
+                seed=args.seed,
+            )
 
     print("\nGénération terminée.")
 

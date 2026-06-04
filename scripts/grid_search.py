@@ -8,7 +8,7 @@ dossier nnUNetTrainer, puis lance l'entraînement et l'évaluation.
 Phases
 ------
 1. **Morpho seule** : exploration de ``prob × max_radius``
-2. **Omission seule** : exploration de ``prob × min_size``
+2. **Omission seule** : exploration de ``prob × radius``
 3. **Combinaisons** : top-N des phases 1 et 2 combinés
 
 Usage
@@ -62,7 +62,8 @@ def generate_trainer_class(
     morpho_prob: float,
     morpho_max_radius: int,
     omission_prob: float,
-    omission_min_size: int,
+    omission_radius: int,
+    num_epochs: int,
 ) -> str:
     """Génère le code Python d'un custom trainer paramétré.
 
@@ -76,8 +77,11 @@ def generate_trainer_class(
         Rayon maximum pour la morphologie.
     omission_prob : float
         Probabilité d'omission.
-    omission_min_size : int
-        Taille seuil pour l'omission.
+    omission_radius : int
+        Rayon de l'ouverture morphologique pour l'omission (vaisseaux de
+        rayon < ``omission_radius`` supprimés).
+    num_epochs : int
+        Nombre d'époques d'entraînement (depuis ``grid_search.num_epochs``).
 
     Returns
     -------
@@ -93,7 +97,7 @@ def generate_trainer_class(
 
         class {class_name}(nnUNetTrainerDegraded):
             """Grid search variant: mP={morpho_prob} mR={morpho_max_radius} """
-            """oP={omission_prob} oS={omission_min_size}."""
+            """oP={omission_prob} oR={omission_radius}."""
 
             def __init__(self, plans, configuration, fold, dataset_json,
                          unpack_dataset=True, device=torch.device("cuda")):
@@ -101,10 +105,16 @@ def generate_trainer_class(
                     plans, configuration, fold, dataset_json,
                     unpack_dataset, device,
                 )
-                self.morpho_prob = {morpho_prob}
-                self.morpho_max_radius = {morpho_max_radius}
-                self.omission_prob = {omission_prob}
-                self.omission_min_size = {omission_min_size}
+                # Pipeline propre à cette variante : écrase tout défaut hérité
+                # (hardcodé ou chargé depuis le YAML) pour que les paramètres
+                # de la grille soient réellement appliqués.
+                self.degradation_pipeline = [
+                    {{"type": "morpho",   "prob": {morpho_prob}, "max_radius": {morpho_max_radius}}},
+                    {{"type": "omission", "prob": {omission_prob}, "radius": {omission_radius}}},
+                ]
+                # num_epochs depuis le config (non géré par nnUNetTrainerDegraded,
+                # qui ne fixe que le mode DEBUG_PIPELINE → 2 époques).
+                self.num_epochs = {num_epochs}
     ''')
 
 
@@ -112,7 +122,7 @@ def make_class_name(
     morpho_prob: float,
     morpho_max_radius: int,
     omission_prob: float,
-    omission_min_size: int,
+    omission_radius: int,
 ) -> str:
     """Génère un nom de classe unique pour un jeu de paramètres.
 
@@ -124,17 +134,17 @@ def make_class_name(
         Rayon morpho.
     omission_prob : float
         Probabilité omission.
-    omission_min_size : int
-        Taille seuil omission.
+    omission_radius : int
+        Rayon d'ouverture omission.
 
     Returns
     -------
     str
-        Nom de classe valide Python (ex: ``nnUNetTrainerDeg_mP03_mR3_oP02_oS150``).
+        Nom de classe valide Python (ex: ``nnUNetTrainerDeg_mP03_mR3_oP02_oR2``).
     """
     mp = str(morpho_prob).replace(".", "")
     op = str(omission_prob).replace(".", "")
-    return f"nnUNetTrainerDeg_mP{mp}_mR{morpho_max_radius}_oP{op}_oS{omission_min_size}"
+    return f"nnUNetTrainerDeg_mP{mp}_mR{morpho_max_radius}_oP{op}_oR{omission_radius}"
 
 
 def install_trainer(class_name: str, code: str) -> str:
@@ -272,7 +282,7 @@ def evaluate_from_folders(pred_dir: str, gt_dir: str) -> dict:
     if not results:
         return {"dice": 0.0, "hd95": np.inf}
 
-    dices = [r["dice"] for r in results]
+    dices = [r["cldice"] for r in results]
     hd95s = [r["hd95"] for r in results if r["hd95"] < np.inf]
 
     return {
@@ -306,6 +316,8 @@ def run_grid_search(config: dict, phase: int, debug: bool = False) -> pd.DataFra
     gs_config = config["grid_search"]
     fold = gs_config["fold"]
     nnunet_config = config["training"]["configurations"][0]
+    # num_epochs depuis le config ; le mode debug force un run court.
+    num_epochs = 5 if debug else int(gs_config.get("num_epochs", 1000))
 
     # Détection device
     if torch.cuda.is_available():
@@ -330,17 +342,17 @@ def run_grid_search(config: dict, phase: int, debug: bool = False) -> pd.DataFra
                     "morpho_prob": mp,
                     "morpho_max_radius": mr,
                     "omission_prob": 0.0,
-                    "omission_min_size": 100,
+                    "omission_radius": 1,
                 })
     elif phase == 2:
         configs = []
         for op in gs_config["omission_grid"]["prob"]:
-            for os_ in gs_config["omission_grid"]["min_size"]:
+            for orad in gs_config["omission_grid"]["radius"]:
                 configs.append({
                     "morpho_prob": 0.0,
                     "morpho_max_radius": 1,
                     "omission_prob": op,
-                    "omission_min_size": os_,
+                    "omission_radius": orad,
                 })
     else:
         # Phase 3 : charger les top-N des phases 1 et 2
@@ -353,7 +365,7 @@ def run_grid_search(config: dict, phase: int, debug: bool = False) -> pd.DataFra
         prev_df = pd.read_csv(csv_path)
         
         # S'assurer que les colonnes nécessaires sont là
-        required_cols = ["phase", "dice_star", "morpho_prob", "morpho_max_radius", "omission_prob", "omission_min_size"]
+        required_cols = ["phase", "dice_star", "morpho_prob", "morpho_max_radius", "omission_prob", "omission_radius"]
         if not all(col in prev_df.columns for col in required_cols):
             print(f"ERREUR: Colonnes manquantes dans {csv_path}. Attendues: {required_cols}")
             return pd.DataFrame()
@@ -376,7 +388,7 @@ def run_grid_search(config: dict, phase: int, debug: bool = False) -> pd.DataFra
                     "morpho_prob": m_row["morpho_prob"],
                     "morpho_max_radius": int(m_row["morpho_max_radius"]),
                     "omission_prob": o_row["omission_prob"],
-                    "omission_min_size": int(o_row["omission_min_size"]),
+                    "omission_radius": int(o_row["omission_radius"]),
                 })
 
     total = len(configs)
@@ -391,7 +403,7 @@ def run_grid_search(config: dict, phase: int, debug: bool = False) -> pd.DataFra
         print(f"\n[{idx+1}/{total}] {class_name}")
 
         # Générer et installer le trainer
-        code = generate_trainer_class(class_name, **cfg)
+        code = generate_trainer_class(class_name, num_epochs=num_epochs, **cfg)
         install_trainer(class_name, code)
 
         start = time.time()
@@ -423,7 +435,7 @@ def run_grid_search(config: dict, phase: int, debug: bool = False) -> pd.DataFra
             "morpho_prob": cfg["morpho_prob"],
             "morpho_max_radius": cfg["morpho_max_radius"],
             "omission_prob": cfg["omission_prob"],
-            "omission_min_size": cfg["omission_min_size"],
+            "omission_radius": cfg["omission_radius"],
             "dice_star": metrics_star["dice"],
             "hd95_star": metrics_star["hd95"],
             "time_s": int(elapsed),

@@ -27,10 +27,10 @@ Commandes d'entraînement::
 Les variantes pré-configurées suivantes sont également disponibles :
 
 - ``nnUNetTrainerDegradedMorphoOnly`` : morpho seule (prob=0.3, r=3)
-- ``nnUNetTrainerDegradedOmissionOnly`` : omission seule (prob=0.2, s=150)
+- ``nnUNetTrainerDegradedOmissionOnly`` : omission seule (prob=0.2, r=2)
 - ``nnUNetTrainerDegradedMild`` : dégradation légère
 - ``nnUNetTrainerDegradedSevere`` : dégradation forte
-- ``nnUNetTrainerDegraded_mP{}_mR{}_oP{}_oS{}`` : via grid search
+- ``nnUNetTrainerDegraded_mP{}_mR{}_oP{}_oR{}`` : via grid search
 
 Notes
 -----
@@ -50,11 +50,35 @@ import os
 from scipy.ndimage import (
     binary_dilation,
     binary_erosion,
+    binary_opening,
     generate_binary_structure,
-    label as label_cc,
 )
 
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
+
+
+def _ball(radius: int) -> np.ndarray:
+    """Élément structurant : boule euclidienne 3D de rayon ``radius`` (voxels)."""
+    r = int(radius)
+    zz, yy, xx = np.ogrid[-r:r + 1, -r:r + 1, -r:r + 1]
+    return (zz * zz + yy * yy + xx * xx) <= r * r
+
+
+def _num_epochs_from_config(default: int = 250) -> int:
+    """Lit ``training.num_epochs`` du YAML, surchargé par DEBUG_PIPELINE=1 (→2).
+
+    Source unique de vérité pour le schedule, partagée par tous les trainers
+    custom (Star/Fixed via nnUNetTrainer250, Stoch via nnUNetTrainerDegraded).
+    """
+    if os.environ.get("DEBUG_PIPELINE") == "1":
+        return 2
+    config_path = os.path.join(os.getcwd(), "configs", "experiment_config.yaml")
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+        return int(config.get("training", {}).get("num_epochs", default))
+    except Exception:
+        return default
 
 
 class nnUNetTrainerDebug(nnUNetTrainer):
@@ -62,6 +86,21 @@ class nnUNetTrainerDebug(nnUNetTrainer):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
                  device: torch.device = torch.device("cuda")):
         super().__init__(plans, configuration, fold, dataset_json, device)
+        self.num_epochs = 2
+
+
+class nnUNetTrainer250(nnUNetTrainer):
+    """nnU-Net standard (GT propres) avec schedule court depuis le config.
+
+    Utilisé pour Model_Star (Dataset100) et Model_Minus_Fixed (Dataset101) :
+    aucune dégradation on-the-fly, seul le nombre d'époques change vs le défaut
+    nnU-Net (1000). La valeur vient de ``training.num_epochs`` (défaut 250).
+    """
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
+                 device: torch.device = torch.device("cuda")):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        self.num_epochs = _num_epochs_from_config()
+        self.print_to_log_file(f"num_epochs set to {self.num_epochs} (config)")
 
 class nnUNetTrainerDegraded(nnUNetTrainer):
     """Trainer nnU-Net avec dégradations morpho + omission on-the-fly."""
@@ -80,7 +119,7 @@ class nnUNetTrainerDegraded(nnUNetTrainer):
         # Pipeline de dégradations par défaut (morpho + omission)
         self.degradation_pipeline = [
             {"type": "morpho",   "prob": 0.3, "max_radius": 3},
-            {"type": "omission", "prob": 0.2, "min_size": 150},
+            {"type": "omission", "prob": 0.2, "radius": 2},
         ]
 
         config_path = os.path.join(os.getcwd(), "configs", "experiment_config.yaml")
@@ -90,6 +129,11 @@ class nnUNetTrainerDegraded(nnUNetTrainer):
                     config = yaml.safe_load(f)
                     if "stochastic_degradations" in config:
                         self.degradation_pipeline = config["stochastic_degradations"]
+                    # Schedule court fixe depuis le config (cf. training.num_epochs).
+                    num_epochs = config.get("training", {}).get("num_epochs")
+                    if num_epochs is not None:
+                        self.num_epochs = int(num_epochs)
+                        self.print_to_log_file(f"num_epochs set to {self.num_epochs} (config)")
                     if os.environ.get("DEBUG_PIPELINE") == "1":
                         self.num_epochs = 2
                         self.print_to_log_file("DEBUG MODE: num_epochs set to 2")
@@ -126,22 +170,16 @@ class nnUNetTrainerDegraded(nnUNetTrainer):
         return result
 
     def _apply_omission(self, result: np.ndarray, cfg: dict) -> np.ndarray:
-        if np.random.rand() >= cfg["prob"]:
+        radius = cfg["radius"]
+        if radius < 1 or np.random.rand() >= cfg["prob"]:
             return result
         binary_mask = result > 0
         if not binary_mask.any():
             return result
-        labeled_array, num_features = label_cc(binary_mask)
-        if num_features <= 1:
-            return result
-        comp_sizes = np.bincount(labeled_array.ravel())
-        small_comps = np.where(
-            (comp_sizes[1:] > 0) & (comp_sizes[1:] < cfg["min_size"])
-        )[0] + 1
-        if len(small_comps) == 0:
-            return result
-        result[labeled_array == np.random.choice(small_comps)] = 0
-        return result
+        # Ouverture par une boule de rayon `radius` : supprime les vaisseaux de
+        # rayon < radius (fines branches distales) en préservant les gros troncs.
+        opened = binary_opening(binary_mask, structure=_ball(radius))
+        return np.where(opened, result, 0).astype(result.dtype)
 
     def _degrade_segmentation(self, seg_np: np.ndarray) -> np.ndarray:
         result = seg_np.copy()
@@ -235,7 +273,7 @@ class nnUNetTrainerDegradedOmissionOnly(nnUNetTrainerDegraded):
                  device: torch.device = torch.device("cuda")):
         super().__init__(plans, configuration, fold, dataset_json, device)
         self.degradation_pipeline = [
-            {"type": "omission", "prob": 0.2, "min_size": 150},
+            {"type": "omission", "prob": 0.2, "radius": 2},
         ]
 
 
@@ -247,7 +285,7 @@ class nnUNetTrainerDegradedMild(nnUNetTrainerDegraded):
         super().__init__(plans, configuration, fold, dataset_json, device)
         self.degradation_pipeline = [
             {"type": "morpho",   "prob": 0.1, "max_radius": 1},
-            {"type": "omission", "prob": 0.1, "min_size": 50},
+            {"type": "omission", "prob": 0.1, "radius": 1},
         ]
 
 
@@ -259,8 +297,73 @@ class nnUNetTrainerDegradedSevere(nnUNetTrainerDegraded):
         super().__init__(plans, configuration, fold, dataset_json, device)
         self.degradation_pipeline = [
             {"type": "morpho",   "prob": 0.5, "max_radius": 5},
-            {"type": "omission", "prob": 0.5, "min_size": 500},
+            {"type": "omission", "prob": 0.5, "radius": 3},
         ]
+
+
+# ============================================================================
+# Calibration du schedule : run long avec snapshots de checkpoints aux jalons
+# ============================================================================
+# Objectif : situer le plateau des métriques de TOPOLOGIE (clDice/Betti0), qui
+# convergent plus tard que le Dice de région, pour choisir num_epochs de façon
+# défendable. Le trainer tourne sur `calibration.budget` époques et sauvegarde un
+# checkpoint nommé `checkpoint_ep<N>.pth` à chaque jalon ; scripts/calibrate.py
+# les évalue ensuite en out-of-fold.
+
+
+def _calibration_cfg() -> tuple[int, set[int]]:
+    """(budget, milestones) depuis le YAML ; DEBUG_PIPELINE=1 → run minuscule."""
+    if os.environ.get("DEBUG_PIPELINE") == "1":
+        return 4, {2, 4}
+    config_path = os.path.join(os.getcwd(), "configs", "experiment_config.yaml")
+    try:
+        cal = (yaml.safe_load(open(config_path)) or {}).get("calibration", {}) or {}
+        return int(cal.get("budget", 1000)), {int(x) for x in cal.get("milestones", [])}
+    except Exception:
+        return 1000, set()
+
+
+def _calib_init(trainer) -> None:
+    budget, milestones = _calibration_cfg()
+    trainer.num_epochs = budget
+    trainer._calib_milestones = milestones
+    trainer.print_to_log_file(
+        f"[calib] budget={budget} epochs, jalons={sorted(milestones)}")
+
+
+def _calib_snapshot(trainer) -> None:
+    """Sauve un checkpoint nommé si l'epoch courante est un jalon."""
+    ep = int(getattr(trainer, "current_epoch", -1))
+    if ep in getattr(trainer, "_calib_milestones", set()):
+        path = os.path.join(trainer.output_folder, f"checkpoint_ep{ep}.pth")
+        trainer.save_checkpoint(path)
+        trainer.print_to_log_file(f"[calib] snapshot epoch {ep} → {path}")
+
+
+class nnUNetTrainerCalib(nnUNetTrainer):
+    """Calibration sur GT propres (pour Model_Star / Model_Minus_Fixed)."""
+
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
+                 device: torch.device = torch.device("cuda")):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        _calib_init(self)
+
+    def on_epoch_end(self):
+        super().on_epoch_end()
+        _calib_snapshot(self)
+
+
+class nnUNetTrainerCalibDegraded(nnUNetTrainerDegraded):
+    """Calibration avec dégradations on-the-fly (pour Model_Minus_Stoch)."""
+
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
+                 device: torch.device = torch.device("cuda")):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        _calib_init(self)  # écrase num_epochs hérité par le budget de calibration
+
+    def on_epoch_end(self):
+        super().on_epoch_end()
+        _calib_snapshot(self)
 
 
 # ── Variantes paramétriques pour grid search ──

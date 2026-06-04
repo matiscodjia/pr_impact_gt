@@ -6,8 +6,9 @@ Deux types de dégradations sont implémentés :
 
 1. **Morphologique** : érosion ou dilatation aléatoire du masque,
    simulant une sur- ou sous-segmentation par un annotateur.
-2. **Omission** : suppression aléatoire de petites composantes
-   connexes, simulant des structures oubliées par un annotateur.
+2. **Omission** : suppression des vaisseaux fins par ouverture
+   morphologique, simulant les petites structures distales oubliées
+   par un annotateur.
 
 Les fonctions opèrent sur des arrays NumPy pour être compatibles
 avec le pipeline de données nnU-Net (``batchgeneratorsv2``).
@@ -27,9 +28,16 @@ import numpy as np
 from scipy.ndimage import (
     binary_dilation,
     binary_erosion,
+    binary_opening,
     generate_binary_structure,
-    label as label_cc,
 )
+
+
+def _ball(radius: int) -> np.ndarray:
+    """Élément structurant : boule euclidienne 3D de rayon ``radius`` (voxels)."""
+    r = int(radius)
+    zz, yy, xx = np.ogrid[-r:r + 1, -r:r + 1, -r:r + 1]
+    return (zz * zz + yy * yy + xx * xx) <= r * r
 
 
 def apply_morpho_degradation(
@@ -88,12 +96,18 @@ def apply_morpho_degradation(
 def apply_omission_degradation(
     segmentation: np.ndarray,
     prob: float = 0.2,
-    min_size: int = 150,
+    radius: int = 1,
 ) -> np.ndarray:
-    """Supprime aléatoirement des petites composantes connexes du masque.
+    """Supprime les vaisseaux fins du masque par ouverture morphologique.
 
-    Simule un annotateur qui oublie de segmenter des petits vaisseaux
-    ou des structures secondaires.
+    Simule un annotateur qui oublie de segmenter les petits vaisseaux
+    distaux. Un arbre vasculaire étant une *seule* composante connexe, on
+    ne peut pas l'« oublier par morceaux » via les composantes connexes ;
+    on cible donc le **calibre**. Une ouverture morphologique (érosion puis
+    dilatation) par une boule de rayon ``radius`` fait disparaître toute
+    structure de rayon inférieur à ``radius`` tout en préservant les gros
+    troncs. Les voxels retirés (``mask & ~ouverture``) sont précisément les
+    fines branches.
 
     Parameters
     ----------
@@ -101,19 +115,20 @@ def apply_omission_degradation(
         Masque de segmentation de shape ``(C, *spatial_dims)``.
     prob : float
         Probabilité d'appliquer la dégradation.
-    min_size : int
-        Taille maximale (en voxels) des composantes éligibles à la
-        suppression. Les composantes plus grandes sont préservées.
+    radius : int
+        Rayon de la boule d'ouverture (en voxels). Plus il est grand, plus
+        on remonte vers le tronc et plus on supprime de vaisseaux.
 
     Returns
     -------
     np.ndarray
-        Masque dégradé avec certaines petites composantes supprimées.
+        Masque dégradé, vaisseaux de rayon < ``radius`` supprimés.
     """
-    if np.random.rand() > prob:
+    if radius < 1 or np.random.rand() > prob:
         return segmentation
 
     result = segmentation.copy()
+    struct = _ball(radius)
 
     for c in range(result.shape[0]):
         mask = result[c] > 0.5
@@ -121,25 +136,11 @@ def apply_omission_degradation(
         if not mask.any():
             continue
 
-        labeled_array, num_features = label_cc(mask)
-
-        if num_features <= 1:
-            continue
-
-        comp_sizes = np.bincount(labeled_array.ravel())
-        # Indices des petites composantes (exclure le fond = index 0)
-        small_comps = np.where(
-            (comp_sizes[1:] > 0) & (comp_sizes[1:] < min_size)
-        )[0] + 1
-
-        if len(small_comps) == 0:
-            continue
-
-        # Supprimer une composante aléatoire
-        to_remove = np.random.choice(small_comps)
-        mask[labeled_array == to_remove] = False
-
-        result[c] = mask.astype(result.dtype)
+        # Ouverture = érosion puis dilatation par une boule de rayon `radius`.
+        # L'ouverture est anti-extensive (opened ⊆ mask), donc `result[c] = opened`
+        # revient à retirer exactement les voxels des vaisseaux fins.
+        opened = binary_opening(mask, structure=struct)
+        result[c] = opened.astype(result.dtype)
 
     return result
 
@@ -149,7 +150,7 @@ _REGISTRY = {
         seg, prob=cfg["prob"], max_radius=cfg["max_radius"]
     ),
     "omission": lambda seg, cfg: apply_omission_degradation(
-        seg, prob=cfg["prob"], min_size=cfg["min_size"]
+        seg, prob=cfg["prob"], radius=cfg["radius"]
     ),
 }
 
@@ -171,7 +172,7 @@ def apply_degradation_pipeline(
 
             [
                 {"type": "morpho",   "prob": 0.3, "max_radius": 3},
-                {"type": "omission", "prob": 0.2, "min_size": 150},
+                {"type": "omission", "prob": 0.2, "radius": 1},
             ]
 
     Returns
