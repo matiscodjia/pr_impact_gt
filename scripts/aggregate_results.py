@@ -485,18 +485,26 @@ def statistical_comparison(df: pd.DataFrame, output_dir: str) -> None:
 # ─────────────────────────────────────────────────────────────────
 
 def plot_grid_search_heatmaps(df: pd.DataFrame, output_dir: str) -> None:
+    """Heatmaps r × p par famille (phases 1 et 2) et bar chart combinaisons (phase 3).
+
+    Attend les colonnes : phase, family, r, p, dice_star, trainer.
+    """
     os.makedirs(output_dir, exist_ok=True)
 
-    # ── Phase 1 : Morpho ──
-    phase1 = df[df["phase"] == 1]
-    if not phase1.empty:
-        probs = sorted(phase1["morpho_prob"].unique())
-        radii = sorted(phase1["morpho_max_radius"].unique())
+    def _heatmap_phase(phase_df: pd.DataFrame, phase_num: int) -> None:
+        if phase_df.empty:
+            return
+        family = phase_df["family"].iloc[0]
+        probs = sorted(phase_df["p"].unique())
+        radii = sorted(phase_df["r"].unique())
+        # Agréger par (r, p) au cas où plusieurs lignes par trainer (phase 3)
+        agg = phase_df.groupby(["r", "p"])["dice_star"].mean()
         matrix = np.zeros((len(radii), len(probs)))
-        for _, row in phase1.iterrows():
-            pi = probs.index(row["morpho_prob"])
-            ri = radii.index(row["morpho_max_radius"])
-            matrix[ri, pi] = row["dice_star"]
+        for (r_val, p_val), val in agg.items():
+            if r_val in radii and p_val in probs:
+                ri = radii.index(r_val)
+                pi = probs.index(p_val)
+                matrix[ri, pi] = val
 
         fig, ax = plt.subplots(figsize=(8, 5))
         im = ax.imshow(matrix, cmap="RdYlGn", aspect="auto", vmin=0.3, vmax=0.9)
@@ -504,50 +512,26 @@ def plot_grid_search_heatmaps(df: pd.DataFrame, output_dir: str) -> None:
         ax.set_xticklabels([f"{p:.1f}" for p in probs])
         ax.set_yticks(range(len(radii)))
         ax.set_yticklabels([str(r) for r in radii])
-        ax.set_xlabel("Probabilité morpho")
-        ax.set_ylabel("Rayon max (voxels)")
-        ax.set_title("Phase 1 — Morpho seule — Dice sur GT*\n(Outcome 2 & 5 : seuils + impact morpho)")
+        ax.set_xlabel("p (probabilité d'application)")
+        ax.set_ylabel("r (rayon / amplitude en voxels)")
+        ax.set_title(
+            f"Phase {phase_num} — {family} — CLDice sur GT*\n"
+            f"(calibration : viser clDice(GT⁻,GT*)∈[0.85,0.90])"
+        )
         for i in range(len(radii)):
             for j in range(len(probs)):
                 ax.text(j, i, f"{matrix[i, j]:.3f}", ha="center", va="center",
                         color="white" if matrix[i, j] < 0.55 else "black",
                         fontsize=11, fontweight="bold")
-        plt.colorbar(im, ax=ax, label="Dice Score")
+        plt.colorbar(im, ax=ax, label="CLDice")
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, "heatmap_phase1_morpho.png"), dpi=150)
+        fname = f"heatmap_phase{phase_num}_{family}.png"
+        plt.savefig(os.path.join(output_dir, fname), dpi=150)
         plt.close()
-        print("  heatmap_phase1_morpho.png")
+        print(f"  {fname}")
 
-    # ── Phase 2 : Omission ──
-    phase2 = df[df["phase"] == 2]
-    if not phase2.empty:
-        probs = sorted(phase2["omission_prob"].unique())
-        radii = sorted(phase2["omission_radius"].unique())
-        matrix = np.zeros((len(radii), len(probs)))
-        for _, row in phase2.iterrows():
-            pi = probs.index(row["omission_prob"])
-            ri = radii.index(row["omission_radius"])
-            matrix[ri, pi] = row["dice_star"]
-
-        fig, ax = plt.subplots(figsize=(8, 5))
-        im = ax.imshow(matrix, cmap="RdYlGn", aspect="auto", vmin=0.3, vmax=0.9)
-        ax.set_xticks(range(len(probs)))
-        ax.set_xticklabels([f"{p:.1f}" for p in probs])
-        ax.set_yticks(range(len(radii)))
-        ax.set_yticklabels([str(r) for r in radii])
-        ax.set_xlabel("Probabilité omission")
-        ax.set_ylabel("Rayon d'ouverture (voxels)")
-        ax.set_title("Phase 2 — Omission seule — Dice sur GT*\n(Outcome 2 & 5 : rayon + impact omission)")
-        for i in range(len(radii)):
-            for j in range(len(probs)):
-                ax.text(j, i, f"{matrix[i, j]:.3f}", ha="center", va="center",
-                        color="white" if matrix[i, j] < 0.55 else "black",
-                        fontsize=11, fontweight="bold")
-        plt.colorbar(im, ax=ax, label="Dice Score")
-        plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, "heatmap_phase2_omission.png"), dpi=150)
-        plt.close()
-        print("  heatmap_phase2_omission.png")
+    _heatmap_phase(df[df["phase"] == 1], 1)
+    _heatmap_phase(df[df["phase"] == 2], 2)
 
     # ── Phase 3 : Bar chart ──
     phase3 = df[df["phase"] == 3]

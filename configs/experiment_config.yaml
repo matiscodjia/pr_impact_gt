@@ -17,10 +17,10 @@ dataset:
 training:
   configurations: ["3d_fullres"]
   folds: [0, 1, 2, 3, 4]
-  # Schedule court fixe (validé par la courbe de convergence, cf. plot_convergence.py).
-  # ~4x plus rapide que le défaut nnU-Net (1000) ; lu par nnUNetTrainerDegraded et
-  # appliqué à nnUNetTrainer250 (Model_Star / Model_Minus_Fixed).
-  num_epochs: 250
+  # Schedule à 500 epochs : point de convergence identifié dans une recherche
+  # antérieure sur ce type de données (artères pulmonaires). Lu par tous les trainers
+  # (nnUNetTrainerStd, nnUNetTrainerDegraded et dérivés). Re-vérifiable via calibrate.py.
+  num_epochs: 500
 
 # ── Matrice expérimentale (consommée par orchestrator.py) ──
 # Un modèle = (trainer nnU-Net, dataset source). tier = priorité d'exécution
@@ -28,61 +28,86 @@ training:
 # pour obtenir un résultat comparatif complet au plus tôt, puis l'affiner.
 experiment:
   models:
-    - name: Model_Star
-      trainer: nnUNetTrainer250
+    # Baseline propre — sert Q1, Q2, Q3
+    - name: M0_Star
+      trainer: nnUNetTrainerStd
       dataset_id: 100
       tier: A
-    - name: Model_Minus_Stoch
-      trainer: nnUNetTrainerDegraded
-      dataset_id: 100
-      tier: A
-    - name: Model_Minus_Fixed
-      trainer: nnUNetTrainer250
-      dataset_id: 101
-      tier: A
-    # Tier C — spécificité de la robustesse (outcome 7), activé en phase P3.
-    - name: Model_Minus_MorphoOnly
-      trainer: nnUNetTrainerDegradedMorphoOnly
-      dataset_id: 100
-      tier: C
-    - name: Model_Minus_OmissionOnly
+    # Q1/Q2 — bruit topologique biaisé (omission), on-the-fly
+    - name: M1_Omission
       trainer: nnUNetTrainerDegradedOmissionOnly
       dataset_id: 100
-      tier: C
+      tier: A
+    # Q2 — bruit de bord NON biaisé (drift μ=0), on-the-fly = augmentation
+    - name: M2_Drift_mu0
+      trainer: nnUNetTrainerDriftMu0
+      dataset_id: 100
+      tier: A
+    # Q3 — biais de bord appris (drift μ<0), dataset FIGÉ (cohorte cohérente)
+    - name: M3_Drift_muMinus
+      trainer: nnUNetTrainerStd
+      dataset_id: 103
+      tier: B
+    # Q3 — biais de bord appris (drift μ>0), dataset FIGÉ
+    - name: M4_Drift_muPlus
+      trainer: nnUNetTrainerStd
+      dataset_id: 104
+      tier: B
 
-# ── Datasets dégradés fixes ──
-# Chaque clé est l'ID nnU-Net cible (Dataset10X_PARSE_Fixed).
-# Les dégradations sont appliquées séquentiellement dans l'ordre de la liste.
-# Ajouter un type suffit à l'empiler — aucun autre fichier à modifier.
+# ── Dégradations formelles — familles θ = (family, r, p) ─────────────────────
+#
+# 4 familles issues de l'étude metric_reliability_study :
+#   distal_omission   : ouverture morpho (boule r) + Bernoulli par composante fine
+#   boundary_jitter   : déplacement surface ±r vx, champ lissé (fraction p affectée)
+#   distal_truncation : élagage tronçons terminaux squelette, Bernoulli par tronçon
+#   homogeneous_morpho: CONTRÔLE irréaliste — érosion uniforme, fraction p affectée
+#
+# POLITIQUE D'APPLICATION : 100 % des images du dataset sont TOUJOURS dégradées.
+#   • p est un paramètre de SÉVÉRITÉ (fraction/proportion affectée), PAS une
+#     probabilité d'appliquer la dégradation à l'image.
+#   • Pour distal_omission et distal_truncation (Bernoulli par composante) :
+#     garantie code → si fine structures existent, au moins une est toujours retirée.
+#   • Pour boundary_jitter et homogeneous_morpho (coverage gate) : p fraction de
+#     surface toujours affectée dès que p > 0.
+#
+# Points d'opération MESURÉS sur PARSE (labelsTr, n=5-8 cas) pour viser
+# clDice(GT⁻, GT*) ∈ [0.85, 0.90] (fenêtre inter-observateur) :
+#
+# Points d'opération MESURÉS sur PARSE (cf. scripts/calibrate_noise.py, experiments_plan.md) :
+#   distal_omission   r2 p0.3 → clDice 0.878 ∈ [0.85,0.90]   (axe topologique, biaisé)
+#   boundary_drift    r1 p0.5 → NSD@0.5 0.88 ∈ [0.85,0.90]   (axe surface ; μ règle le biais)
+#   distal_truncation : ÉCARTÉ — redondant avec distal_omission (même axe : réduction
+#                       biaisée du foreground distal). clDice était le mauvais instrument
+#                       pour le juger (squelette aveugle au limage de bord).
+# Politique d'application : 100 % des images, toujours. p = sévérité, jamais un taux.
+
+# ── Datasets dégradés FIGÉS (Q3 : biais cohérent par cas = une cohorte d'annotateurs) ──
+# Une seule réalisation par cas (seed fixe) → cible stable que le modèle peut apprendre.
 fixed_datasets:
-  101:
-    name: "Dataset101_PARSE_MorphoOmission"
+  103:
+    name: "Dataset103_PARSE_DriftMuMinus"
     degradations:
-      - type: morpho
-        prob: 0.3
-        max_radius: 3
-      - type: omission
-        prob: 0.2
-        radius: 2
-  102:
-    name: "Dataset102_PARSE_MorphoOmission_102"
+      # Biais de bord SOUS-segmentant (μ<0) — réaliste, cohérent sur tout le dataset
+      - family: boundary_drift
+        r: 1
+        p: 0.5
+        mu: -0.5
+  104:
+    name: "Dataset104_PARSE_DriftMuPlus"
     degradations:
-      - type: morpho
-        prob: 1
-        max_radius: 3
-      - type: omission
-        prob: 1
-        radius: 2
+      # Biais de bord SUR-segmentant (μ>0)
+      - family: boundary_drift
+        r: 1
+        p: 0.5
+        mu: 0.5
 
-# ── Dégradations stochastiques on-the-fly (nnUNetTrainerDegraded) ──
-# Même format que fixed_datasets[*].degradations — les types sont identiques.
+# ── Dégradation stochastique on-the-fly (fallback nnUNetTrainerDegraded générique) ──
+# Les modèles du plan utilisent des trainers dédiés (OmissionOnly, DriftMu0). Ceci n'est
+# que le défaut si on lance le trainer générique. Une seule famille (pas de bruit composé).
 stochastic_degradations:
-  - type: morpho
-    prob: 0.3
-    max_radius: 3
-  - type: omission
-    prob: 0.2
-    radius: 2
+  - family: distal_omission
+    r: 2
+    p: 0.3
 
 # ── Calibration du schedule (choix de num_epochs) ──
 # Un run long UNIQUE sur 1 fold, avec snapshots de checkpoints aux jalons.
@@ -96,36 +121,61 @@ calibration:
   dataset_id: 100
   fold: 0
   plateau_tol: 0.01                             # plateau = clDice ≥ (1-tol)·max
+  # Calibration du bruit : plage de (r, p) à balayer pour atteindre [0.85, 0.90]
+  noise_calibration:
+    families: [distal_omission, boundary_jitter, distal_truncation, homogeneous_morpho]
+    r_values: [1, 2, 3, 4, 5]
+    p_values: [0.1, 0.2, 0.3, 0.5, 0.7, 1.0]
+    family_r_limits:
+      boundary_jitter: [1, 2, 3]   # r>3 sort de la fenêtre inter-observateur sur PARSE
+    target_cldice: [0.85, 0.90]    # fenêtre inter-observateur à viser
+    n_seeds: 5
 
 # ── Grid search ──
+# Politique : chaque point (family, r, p) est un trainer on-the-fly qui dégrade
+# 100 % des batches d'entraînement. p est la SÉVÉRITÉ, pas le taux d'application.
+# Phase 1 = distal_omission seule (r × p), Phase 2 = boundary_jitter seule,
+# Phase 3 = meilleures combinaisons des deux.
 grid_search:
-  morpho_grid:
-    prob: [0.1, 0.2, 0.3, 0.5]
-    max_radius: [1, 2, 3, 5]
-  omission_grid:
-    prob: [0.1, 0.2, 0.3, 0.5]
-    radius: [1, 2, 3]
+  families: [distal_omission, boundary_jitter]
+  r_values: [1, 2, 3]
+  p_values: [0.3, 0.5, 0.8, 1.0]   # sévérité croissante ; 1.0 = retrait/couverture total
   top_n_combos: 3
   # Comparaison relative (un seul fold) → schedule plus court que les modèles principaux.
   num_epochs: 150
   fold: 0
 
 # ── Évaluation ──
+# Un bruit par scénario (pas de bruit composé). Métrique appariée :
+#   omission → clDice/Betti0 ; drift → NSD@0.5 + volume_delta (ΔV signé, directionnel).
 evaluation:
-  metrics: ["CLDice", "HD95", "NSD", "Betti0"]
+  metrics: ["CLDice", "HD95", "NSD", "Betti0", "VolumeDelta"]
   scenarios:
     - name: "GT_star"
-      description: "Évaluation sur GT propres"
+      description: "Référence propre (GT*)."
       degradation: null
-    - name: "GT_minus_test"
-      description: "Évaluation sur GT de test dégradées systématiquement (prob=1.0)"
+    - name: "GT_minus_omission"
+      description: >
+        GT⁻ topologique (distal_omission r2 p0.3 → clDice 0.878). Q1 : pénalise-t-elle
+        un modèle entraîné propre ? Métrique appariée clDice/Betti0.
       degradation:
-        - type: morpho
-          prob: 1.0
-          max_radius: 3
-        - type: omission
-          prob: 1.0
-          radius: 2
+        - family: distal_omission
+          r: 2
+          p: 0.3
+    - name: "GT_minus_drift_neg"
+      description: "GT⁻ biais de bord sous-segmentant (drift r1 p0.5 μ=−0.5). Q3 (μ<0)."
+      degradation:
+        - family: boundary_drift
+          r: 1
+          p: 0.5
+          mu: -0.5
+    - name: "GT_minus_drift_pos"
+      description: "GT⁻ biais de bord sur-segmentant (drift r1 p0.5 μ=+0.5). Q3 (μ>0)."
+      degradation:
+        - family: boundary_drift
+          r: 1
+          p: 0.5
+          mu: 0.5
 
 # ── Hardware profiles ──
 hardware:

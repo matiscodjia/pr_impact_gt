@@ -112,6 +112,116 @@ def compute_hd95(pred: np.ndarray, gt: np.ndarray, spacing: tuple = (1, 1, 1)) -
     return float(np.percentile(all_distances, 95))
 
 
+def compute_volume_delta(pred: np.ndarray, gt: np.ndarray) -> float:
+    """Différence de volume relative SIGNÉE : (|pred| − |gt|) / |gt|.
+
+    Métrique DIRECTIONNELLE pour le biais de segmentation (Q3) : < 0 = sous-segmentation,
+    > 0 = sur-segmentation, monotone dans le biais de dérive μ de boundary_drift.
+    Contrairement à NSD/HD95 (non signées), elle distingue le SENS du biais."""
+    n_gt = float((gt > 0.5).sum())
+    if n_gt == 0:
+        return 0.0
+    return float((pred > 0.5).sum() - n_gt) / n_gt
+
+
+# ─────────────────────────────────────────────────────────────────
+# Évaluation avec cache des features de la prédiction
+# ─────────────────────────────────────────────────────────────────
+# Lorsqu'une même prédiction est comparée à plusieurs GT (calibration : GT_star
+# ET GT_minus_test), le squelette 3D, les EDT et les composantes connexes de la
+# prédiction sont identiques d'un scénario à l'autre. On les calcule une seule
+# fois par cas (PredFeatures), puis evaluate_pair_cached ne recalcule que la part
+# GT. ≈ ÷2 sur le temps de calcul des métriques. Résultats numériquement
+# identiques aux compute_* ci-dessus.
+
+class PredFeatures:
+    """Quantités dérivées de la **prédiction seule**, réutilisables sur tout scénario GT."""
+
+    __slots__ = ("spacing", "bool", "any", "skel", "dt", "surf", "dt_from_surf", "n_components")
+
+    def __init__(self, pred: np.ndarray, spacing: tuple = (1, 1, 1)):
+        from scipy.ndimage import (binary_erosion, distance_transform_edt,
+                                    generate_binary_structure, label)
+        from skimage.morphology import skeletonize
+
+        self.spacing = spacing
+        self.bool = pred > 0.5
+        self.any = bool(self.bool.any())
+        if not self.any:
+            self.skel = self.dt = self.surf = self.dt_from_surf = None
+            self.n_components = 0
+            return
+        struct = np.ones((3, 3, 3))
+        self.skel = skeletonize(self.bool)
+        self.dt = distance_transform_edt(~self.bool, sampling=spacing)
+        self.surf = self.bool ^ binary_erosion(self.bool, structure=struct)
+        self.dt_from_surf = distance_transform_edt(~self.surf, sampling=spacing)
+        self.n_components = label(self.bool, structure=generate_binary_structure(3, 3))[1]
+
+
+def _cldice_cached(pf: "PredFeatures", gt_bool: np.ndarray) -> float:
+    from skimage.morphology import skeletonize
+
+    if not pf.any and not gt_bool.any():
+        return 1.0
+    if not pf.any or not gt_bool.any():
+        return 0.0
+    skel_gt = skeletonize(gt_bool)
+    tprec = np.logical_and(pf.skel, gt_bool).sum() / max(pf.skel.sum(), 1)
+    tsens = np.logical_and(skel_gt, pf.bool).sum() / max(skel_gt.sum(), 1)
+    if tprec + tsens == 0:
+        return 0.0
+    return float(2.0 * tprec * tsens / (tprec + tsens))
+
+
+def _hd95_cached(pf: "PredFeatures", gt_bool: np.ndarray) -> float:
+    from scipy.ndimage import distance_transform_edt
+
+    if not pf.any or not gt_bool.any():
+        return np.inf
+    dt_gt = distance_transform_edt(~gt_bool, sampling=pf.spacing)
+    all_distances = np.concatenate([pf.dt[gt_bool], dt_gt[pf.bool]])
+    return float(np.percentile(all_distances, 95))
+
+
+def _nsd_cached(pf: "PredFeatures", gt_bool: np.ndarray, tolerance: float = 2.0) -> float:
+    from scipy.ndimage import binary_erosion, distance_transform_edt
+
+    if not pf.any and not gt_bool.any():
+        return 1.0
+    if not pf.any or not gt_bool.any():
+        return 0.0
+    struct = np.ones((3, 3, 3))
+    surf_gt = gt_bool ^ binary_erosion(gt_bool, structure=struct)
+    dt_from_surf_gt = distance_transform_edt(~surf_gt, sampling=pf.spacing)
+    pred_within = (dt_from_surf_gt[pf.surf] <= tolerance).sum()
+    gt_within = (pf.dt_from_surf[surf_gt] <= tolerance).sum()
+    return float((pred_within + gt_within) / (pf.surf.sum() + surf_gt.sum()))
+
+
+def _betti0_cached(pf: "PredFeatures", gt_bool: np.ndarray) -> int:
+    from scipy.ndimage import generate_binary_structure, label
+
+    _, n_gt = label(gt_bool, structure=generate_binary_structure(3, 3))
+    return abs(pf.n_components - n_gt)
+
+
+def evaluate_pair_cached(pf: "PredFeatures", gt: np.ndarray, tolerance: float = 2.0) -> dict:
+    """Idem ``evaluate_pair`` mais réutilise les features de prédiction ``pf``.
+
+    Le spacing est porté par ``pf`` (prédiction et GT partagent la géométrie du cas).
+    """
+    gt_bool = gt > 0.5
+    n_gt = float(gt_bool.sum())
+    return {
+        "cldice": _cldice_cached(pf, gt_bool),
+        "hd95": _hd95_cached(pf, gt_bool),
+        "nsd": _nsd_cached(pf, gt_bool, tolerance),
+        "betti0": _betti0_cached(pf, gt_bool),
+        "volume_delta": (float(pf.bool.sum()) - n_gt) / n_gt if n_gt else 0.0,
+    }
+
+
 def _evaluate_one(pred_path: str, gt_dir: str, model_name: str, scenario_name: str) -> dict | None:
     fname = os.path.basename(pred_path)
     gt_path = os.path.join(gt_dir, fname)
@@ -140,6 +250,7 @@ def _evaluate_one(pred_path: str, gt_dir: str, model_name: str, scenario_name: s
         "hd95": hd95,
         "nsd": nsd,
         "betti0": betti0,
+        "volume_delta": compute_volume_delta(pred_data, gt_data),
     }
 
 

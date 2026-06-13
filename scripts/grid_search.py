@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""Grid search des paramètres de dégradation avec nnU-Net.
+"""Grid search des paramètres de dégradation formelle avec nnU-Net.
 
 Génère dynamiquement des custom trainers nnU-Net pour chaque
-combinaison de paramètres de dégradation, les installe dans le
-dossier nnUNetTrainer, puis lance l'entraînement et l'évaluation.
+combinaison (family, r, p) des familles formelles de dégradation,
+les installe dans le dossier nnUNetTrainer, puis lance l'entraînement
+et l'évaluation.
 
 Phases
 ------
-1. **Morpho seule** : exploration de ``prob × max_radius``
-2. **Omission seule** : exploration de ``prob × radius``
-3. **Combinaisons** : top-N des phases 1 et 2 combinés
+1. **distal_omission seule** : exploration de ``r × p``
+2. **boundary_jitter seule**  : exploration de ``r × p``
+3. **Combinaisons**           : top-N des phases 1 et 2 combinés
+
+Familles disponibles : distal_omission, boundary_jitter, distal_truncation,
+homogeneous_morpho (contrôle).
 
 Usage
 -----
@@ -59,35 +63,27 @@ def get_nnunet_trainer_dir() -> str:
 
 def generate_trainer_class(
     class_name: str,
-    morpho_prob: float,
-    morpho_max_radius: int,
-    omission_prob: float,
-    omission_radius: int,
+    pipeline: list,
     num_epochs: int,
 ) -> str:
-    """Génère le code Python d'un custom trainer paramétré.
+    """Génère le code Python d'un custom trainer paramétré (familles formelles).
 
     Parameters
     ----------
     class_name : str
         Nom de la classe trainer.
-    morpho_prob : float
-        Probabilité de dégradation morphologique.
-    morpho_max_radius : int
-        Rayon maximum pour la morphologie.
-    omission_prob : float
-        Probabilité d'omission.
-    omission_radius : int
-        Rayon de l'ouverture morphologique pour l'omission (vaisseaux de
-        rayon < ``omission_radius`` supprimés).
+    pipeline : list[dict]
+        Liste de configs dégradation : [{"family": ..., "r": ..., "p": ...}, ...]
     num_epochs : int
-        Nombre d'époques d'entraînement (depuis ``grid_search.num_epochs``).
+        Nombre d'époques d'entraînement.
 
     Returns
     -------
     str
         Code source Python de la classe.
     """
+    pipeline_repr = repr(pipeline)
+    families_summary = " | ".join(f"{c['family']}(r={c['r']}, p={c['p']})" for c in pipeline)
     return textwrap.dedent(f'''\
         """Auto-generated trainer for grid search: {class_name}."""
         import torch
@@ -96,55 +92,45 @@ def generate_trainer_class(
         )
 
         class {class_name}(nnUNetTrainerDegraded):
-            """Grid search variant: mP={morpho_prob} mR={morpho_max_radius} """
-            """oP={omission_prob} oR={omission_radius}."""
+            """Grid search variant: {families_summary}."""
 
             def __init__(self, plans, configuration, fold, dataset_json,
-                         unpack_dataset=True, device=torch.device("cuda")):
-                super().__init__(
-                    plans, configuration, fold, dataset_json,
-                    unpack_dataset, device,
-                )
-                # Pipeline propre à cette variante : écrase tout défaut hérité
-                # (hardcodé ou chargé depuis le YAML) pour que les paramètres
-                # de la grille soient réellement appliqués.
-                self.degradation_pipeline = [
-                    {{"type": "morpho",   "prob": {morpho_prob}, "max_radius": {morpho_max_radius}}},
-                    {{"type": "omission", "prob": {omission_prob}, "radius": {omission_radius}}},
-                ]
-                # num_epochs depuis le config (non géré par nnUNetTrainerDegraded,
-                # qui ne fixe que le mode DEBUG_PIPELINE → 2 époques).
+                         device=torch.device("cuda")):
+                super().__init__(plans, configuration, fold, dataset_json, device)
+                # Pipeline propre à cette variante : écrase le défaut hérité du YAML
+                self.degradation_pipeline = {pipeline_repr}
                 self.num_epochs = {num_epochs}
     ''')
 
 
-def make_class_name(
-    morpho_prob: float,
-    morpho_max_radius: int,
-    omission_prob: float,
-    omission_radius: int,
-) -> str:
-    """Génère un nom de classe unique pour un jeu de paramètres.
+_FAMILY_ABBREV = {
+    "distal_omission":   "DO",
+    "boundary_jitter":   "BJ",
+    "distal_truncation": "DT",
+    "homogeneous_morpho": "HM",
+}
+
+
+def make_class_name(pipeline: list) -> str:
+    """Génère un nom de classe unique pour un pipeline de dégradations.
 
     Parameters
     ----------
-    morpho_prob : float
-        Probabilité morpho.
-    morpho_max_radius : int
-        Rayon morpho.
-    omission_prob : float
-        Probabilité omission.
-    omission_radius : int
-        Rayon d'ouverture omission.
+    pipeline : list[dict]
+        Liste de configs dégradation : [{"family": ..., "r": ..., "p": ...}, ...]
 
     Returns
     -------
     str
-        Nom de classe valide Python (ex: ``nnUNetTrainerDeg_mP03_mR3_oP02_oR2``).
+        Nom de classe valide Python.
+        Exemple : ``nnUNetTrainerDeg_DO_r2_p03_BJ_r2_p03``
     """
-    mp = str(morpho_prob).replace(".", "")
-    op = str(omission_prob).replace(".", "")
-    return f"nnUNetTrainerDeg_mP{mp}_mR{morpho_max_radius}_oP{op}_oR{omission_radius}"
+    parts = []
+    for c in pipeline:
+        abbrev = _FAMILY_ABBREV.get(c["family"], c["family"][:2].upper())
+        p_str = str(float(c["p"])).replace(".", "")
+        parts.append(f"{abbrev}_r{c['r']}_p{p_str}")
+    return "nnUNetTrainerDeg_" + "_".join(parts)
 
 
 def install_trainer(class_name: str, code: str) -> str:
@@ -333,29 +319,28 @@ def run_grid_search(config: dict, phase: int, debug: bool = False) -> pd.DataFra
 
     results = []
 
+    families = gs_config.get("families", ["distal_omission", "boundary_jitter"])
+    r_values = gs_config.get("r_values", [1, 2, 3])
+    p_values = gs_config.get("p_values", [0.1, 0.3, 0.5, 0.8])
+    top_n = gs_config.get("top_n_combos", 3)
+
     # ── Génération des configs ──
     if phase == 1:
-        configs = []
-        for mp in gs_config["morpho_grid"]["prob"]:
-            for mr in gs_config["morpho_grid"]["max_radius"]:
-                configs.append({
-                    "morpho_prob": mp,
-                    "morpho_max_radius": mr,
-                    "omission_prob": 0.0,
-                    "omission_radius": 1,
-                })
+        # Phase 1 : distal_omission seule (analog de l'ancienne "omission")
+        family1 = families[0] if families else "distal_omission"
+        configs = [
+            [{"family": family1, "r": r, "p": p}]
+            for r in r_values for p in p_values
+        ]
     elif phase == 2:
-        configs = []
-        for op in gs_config["omission_grid"]["prob"]:
-            for orad in gs_config["omission_grid"]["radius"]:
-                configs.append({
-                    "morpho_prob": 0.0,
-                    "morpho_max_radius": 1,
-                    "omission_prob": op,
-                    "omission_radius": orad,
-                })
+        # Phase 2 : boundary_jitter seule (analog de l'ancienne "morpho")
+        family2 = families[1] if len(families) > 1 else "boundary_jitter"
+        configs = [
+            [{"family": family2, "r": r, "p": p}]
+            for r in r_values for p in p_values
+        ]
     else:
-        # Phase 3 : charger les top-N des phases 1 et 2
+        # Phase 3 : top-N de chaque phase, combinés
         print("Phase 3 : chargement des résultats précédents...")
         csv_path = "results/grid_search_results.csv"
         if not os.path.exists(csv_path):
@@ -363,47 +348,41 @@ def run_grid_search(config: dict, phase: int, debug: bool = False) -> pd.DataFra
             return pd.DataFrame()
 
         prev_df = pd.read_csv(csv_path)
-        
-        # S'assurer que les colonnes nécessaires sont là
-        required_cols = ["phase", "dice_star", "morpho_prob", "morpho_max_radius", "omission_prob", "omission_radius"]
+        required_cols = ["phase", "dice_star", "family", "r", "p"]
         if not all(col in prev_df.columns for col in required_cols):
             print(f"ERREUR: Colonnes manquantes dans {csv_path}. Attendues: {required_cols}")
             return pd.DataFrame()
 
-        top_n = gs_config.get("top_n_combos", 3)
+        phase1_df = prev_df[prev_df["phase"] == 1].nlargest(top_n, "dice_star")
+        phase2_df = prev_df[prev_df["phase"] == 2].nlargest(top_n, "dice_star")
 
-        # Top morpho
-        phase1 = prev_df[prev_df["phase"] == 1].nlargest(top_n, "dice_star")
-        # Top omission
-        phase2 = prev_df[prev_df["phase"] == 2].nlargest(top_n, "dice_star")
-
-        if phase1.empty or phase2.empty:
+        if phase1_df.empty or phase2_df.empty:
             print("ERREUR: Phase 1 ou Phase 2 n'a pas de résultats valides.")
             return pd.DataFrame()
 
         configs = []
-        for _, m_row in phase1.iterrows():
-            for _, o_row in phase2.iterrows():
-                configs.append({
-                    "morpho_prob": m_row["morpho_prob"],
-                    "morpho_max_radius": int(m_row["morpho_max_radius"]),
-                    "omission_prob": o_row["omission_prob"],
-                    "omission_radius": int(o_row["omission_radius"]),
-                })
+        for _, r1 in phase1_df.iterrows():
+            for _, r2 in phase2_df.iterrows():
+                configs.append([
+                    {"family": r1["family"], "r": float(r1["r"]), "p": float(r1["p"])},
+                    {"family": r2["family"], "r": float(r2["r"]), "p": float(r2["p"])},
+                ])
 
+    phase_names = {1: f"{families[0] if families else 'FAMILY1'} SEULE",
+                   2: f"{families[1] if len(families)>1 else 'FAMILY2'} SEULE",
+                   3: "COMBINAISONS"}
     total = len(configs)
-    phase_names = {1: "MORPHO SEULE", 2: "OMISSION SEULE", 3: "COMBINAISONS"}
 
     print(f"\n{'#'*60}")
     print(f"  PHASE {phase} — {phase_names[phase]} — {total} configurations")
     print(f"{'#'*60}")
 
-    for idx, cfg in enumerate(configs):
-        class_name = make_class_name(**cfg)
+    for idx, pipeline in enumerate(configs):
+        class_name = make_class_name(pipeline)
         print(f"\n[{idx+1}/{total}] {class_name}")
 
         # Générer et installer le trainer
-        code = generate_trainer_class(class_name, num_epochs=num_epochs, **cfg)
+        code = generate_trainer_class(class_name, pipeline=pipeline, num_epochs=num_epochs)
         install_trainer(class_name, code)
 
         start = time.time()
@@ -429,18 +408,19 @@ def run_grid_search(config: dict, phase: int, debug: bool = False) -> pd.DataFra
 
         elapsed = time.time() - start
 
-        result = {
-            "phase": phase,
-            "trainer": class_name,
-            "morpho_prob": cfg["morpho_prob"],
-            "morpho_max_radius": cfg["morpho_max_radius"],
-            "omission_prob": cfg["omission_prob"],
-            "omission_radius": cfg["omission_radius"],
-            "dice_star": metrics_star["dice"],
-            "hd95_star": metrics_star["hd95"],
-            "time_s": int(elapsed),
-        }
-        results.append(result)
+        # Une ligne par famille dans le pipeline (pour la phase 3 : 2 lignes)
+        for cfg in pipeline:
+            result = {
+                "phase": phase,
+                "trainer": class_name,
+                "family": cfg["family"],
+                "r": cfg["r"],
+                "p": cfg["p"],
+                "dice_star": metrics_star["dice"],
+                "hd95_star": metrics_star["hd95"],
+                "time_s": int(elapsed),
+            }
+            results.append(result)
 
         print(
             f"  Dice(GT*)={metrics_star['dice']:.4f} | "

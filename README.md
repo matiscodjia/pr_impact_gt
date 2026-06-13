@@ -130,9 +130,9 @@ Cela exécute, dans l'ordre, **6 étapes** :
 | 1 | `convert` | Convertit PARSE au format nnU-Net |
 | 2 | `preprocess` | Prétraitement nnU-Net (Dataset100) |
 | 3 | `generate_degraded` | Crée les annotations dégradées pour l'évaluation |
-| 4 | `create_fixed_dataset` | Crée le dataset à annotations dégradées fixes (Dataset101) |
-| 5 | `preprocess_fixed` | Prétraitement du Dataset101 |
-| 6 | `orchestrate` | **Entraîne les 3 modèles × 5 folds**, collecte les métriques, écrit le rapport |
+| 4 | `create_fixed_dataset` | Crée les datasets figés drift μ± (Dataset103/104, cf. §8 bis) |
+| 5 | `preprocess_fixed` | Prétraitement des datasets figés |
+| 6 | `orchestrate` | **Entraîne les modèles M0–M4 × folds**, collecte les métriques, écrit le rapport |
 
 L'étape 6 affiche une **barre de progression** par entraînement (époques + temps
 restant estimé) et un compteur d'étape `[i/N]`.
@@ -314,7 +314,7 @@ l'entraînement de calibration est déjà fait.)
 ### `plot_convergence.py` — courbe de convergence (Dice par époque)
 
 ```bash
-python scripts/plot_convergence.py [--trainer nnUNetTrainer250] [--dataset 100] \
+python scripts/plot_convergence.py [--trainer nnUNetTrainerStd] [--dataset 100] \
     [--out results/figures/convergence.png]
 ```
 
@@ -322,30 +322,112 @@ python scripts/plot_convergence.py [--trainer nnUNetTrainer250] [--dataset 100] 
 
 ```bash
 python scripts/grid_search.py --config configs/experiment_config.yaml --phase all
-# --phase 1 (morpho) | 2 (omission) | 3 (combinaisons) | all
+# --phase 1 (distal_omission seule) | 2 (boundary_jitter seule) | 3 (combinaisons) | all
 # --debug pour un run court
 ```
 
-### Étapes de préparation (normalement gérées par `run_pipeline.sh`)
+### `calibrate_noise.py` — calibration IAA des paramètres de dégradation (avant le pipeline)
+
+Applique chaque dégradation (SANS entraînement) sur quelques masques et mesure l'accord
+GT⁻ vs GT* avec l'instrument **apparié au type de bruit** : clDice/Betti₀ pour les bruits
+topologiques (omission, troncature), NSD@0.5 mm/HD95 pour le bruit de surface
+(`boundary_drift`). Identifie les paramètres dans la fenêtre inter-observateur
+(clDice ∈ [0.85, 0.90]). Justifie la magnitude du bruit sans la choisir arbitrairement.
 
 ```bash
-# Conversion PARSE → nnU-Net
-python scripts/convert_parse_to_nnunet.py --data_dir /chemin/vers/PARSE --dataset_id 100
+# Calibration du bruit (CPU, quelques minutes)
+python scripts/calibrate_noise.py --n-cases 4
+python scripts/calibrate_noise.py --drift-mu -1 -0.5 0 0.5 1 --drift-r 2   # balayage du biais μ
+```
 
-# Prétraitement nnU-Net
+Sortie : `results/noise_calibration.csv` — (family, r, p, mu, clDice, NSD@0.5, HD95, Betti0).
+La métrique **hors-axe** doit rester plate (témoin de dissociation). Point d'opération
+topologique validé : `distal_omission` r2 p0.3 → clDice 0.864. Voir `experiments_plan.md`.
+
+### `visualize_degradations.py` — figures 2D + 3D de l'effet des bruits
+
+Rend l'effet de chaque famille sur un masque réel.
+**🔴 Rouge = voxels retirés** (bord reculé / amputation), **🔵 bleu = voxels ajoutés**
+(bord avancé), gris translucide = structure conservée. Produit deux figures par cas :
+`degradation_2d_<id>.png` (coupe axiale Original | Dégradé | Diff, annotée clDice + nb voxels)
+et `degradation_3d_<id>.png` (rendu surfacique 3D, une vue par famille).
+
+```bash
+# Auto : 3 cas de labelsTr, 4 familles, r=2 p=0.5
+python scripts/visualize_degradations.py
+
+# Cas précis / paramètres / sous-ensemble de familles
+python scripts/visualize_degradations.py --input mon_masque.nii.gz --r 2 --p 1.0 --seed 7
+python scripts/visualize_degradations.py --families distal_omission boundary_drift
+python scripts/visualize_degradations.py --mu -0.5            # boundary_drift biaisé (sous-seg)
+python scripts/visualize_degradations.py --no-3d             # 2D seulement (rapide)
+python scripts/visualize_degradations.py --ds-factor 3       # 3D plus léger
+python scripts/visualize_degradations.py --dpi 300           # haute résolution
+```
+
+**Schéma du biais de dérive μ** (`boundary_drift`) — montre sous-segmentation ↔ jitter ↔
+sur-segmentation, avec l'accord inter-annotateur (clDice + NSD@0.5 mm) annoté sous chaque
+vue pour prouver le réalisme :
+
+```bash
+python scripts/visualize_degradations.py --mu-sweep -1 -0.5 0 0.5 1 --r 2 --p 1.0 --dpi 300
+# → drift_mu_sweep_2d_<id>.png  et  drift_mu_sweep_3d_<id>.png
+```
+
+Sortie : `result/figures/degradations/`. Le spacing du NIfTI est propagé au générateur
+(familles mm-aware) et respecté dans l'aspect ratio. Note : `distal_truncation` lance
+`skeletonize` sur le volume plein (~1 min/cas) — restreindre avec `--families` ou `--no-3d`
+pour itérer vite.
+
+---
+
+## 8 bis. Exécution du plan d'expériences sur le cluster — étapes dans l'ordre
+
+Plan détaillé (modèles, questions, résultats attendus) : **`experiments_plan.md`**.
+Modèles : `M0_Star` (propre), `M1_Omission` (topologique on-the-fly), `M2_Drift_mu0`
+(bord non biaisé on-the-fly), `M3/M4_Drift_mu±` (biais de bord, datasets FIGÉS 103/104).
+Schedule : **500 epochs** (`training.num_epochs`).
+
+Lancer **à tour de rôle** :
+
+```bash
+# 0) À CHAQUE session
+source .env_nnunet
+
+# 1) Données → Dataset100 (propre)
+python scripts/convert_parse_to_nnunet.py --data_dir /chemin/vers/PARSE --dataset_id 100
 nnUNetv2_plan_and_preprocess -d 100 --verify_dataset_integrity
 
-# Annotations dégradées (évaluation)
+# 2) (optionnel) vérifier la calibration IAA du bruit
+python scripts/calibrate_noise.py --n-cases 4
+
+# 3) GT⁻ d'ÉVALUATION (scénarios : omission r2p0.3, drift μ−0.5, drift μ+0.5)
 python scripts/generate_degraded_dataset.py \
     --dataset_dir "$nnUNet_raw/Dataset100_PARSE" \
     --config configs/experiment_config.yaml --seed 42
 
-# Dataset à annotations dégradées fixes (Dataset101)
-python scripts/create_fixed_degraded_dataset.py --dataset_id 101 \
+# 4) Datasets d'ENTRAÎNEMENT figés pour Q3 (drift μ±)
+python scripts/create_fixed_degraded_dataset.py --dataset_id 103 \
     --source_dir "$nnUNet_raw/Dataset100_PARSE" \
-    --output_dir "$nnUNet_raw/Dataset101_PARSE_Fixed" \
+    --output_dir "$nnUNet_raw/Dataset103_PARSE_DriftMuMinus" \
     --config configs/experiment_config.yaml --seed 42
-nnUNetv2_plan_and_preprocess -d 101 --verify_dataset_integrity
+nnUNetv2_plan_and_preprocess -d 103 --verify_dataset_integrity
+
+python scripts/create_fixed_degraded_dataset.py --dataset_id 104 \
+    --source_dir "$nnUNet_raw/Dataset100_PARSE" \
+    --output_dir "$nnUNet_raw/Dataset104_PARSE_DriftMuPlus" \
+    --config configs/experiment_config.yaml --seed 42
+nnUNetv2_plan_and_preprocess -d 104 --verify_dataset_integrity
+
+# 5) Entraînement (500 ep, reprenable) + collecte métriques + rapport — tiers A puis B
+#    L'orchestrateur enchaîne M0–M4 × folds, puis collect_metrics.py et report.py.
+python scripts/orchestrator.py --config configs/experiment_config.yaml --tiers AB
+#    Premier passage rapide possible sur 1 fold :  --folds 0
+#    Un modèle précis :  --models M1_Omission
+
+# 6) Résultats
+python scripts/report.py --config configs/experiment_config.yaml   # regénère figures + stats
+cat result/statistical_tests.csv
 ```
 
 ---
@@ -357,24 +439,86 @@ utiles :
 
 ```yaml
 training:
-  num_epochs: 250          # ← nombre d'époques (à ajuster via la calibration)
+  num_epochs: 500          # point de convergence (recherche antérieure) ; lu par tous les trainers
   folds: [0, 1, 2, 3, 4]   # folds de la validation croisée
 
-calibration:
-  budget: 1000             # longueur du run de calibration
-  milestones: [200, 300, 400, 500, 600, 800, 1000]   # points de mesure
-
 experiment:
-  models:                  # la matrice expérimentale (tier A = prioritaire)
-    - {name: Model_Star,        trainer: nnUNetTrainer250,       dataset_id: 100, tier: A}
-    - {name: Model_Minus_Stoch, trainer: nnUNetTrainerDegraded,  dataset_id: 100, tier: A}
-    - {name: Model_Minus_Fixed, trainer: nnUNetTrainer250,       dataset_id: 101, tier: A}
+  models:                  # plan M0–M4 (cf. experiments_plan.md) ; tier A avant B
+    - {name: M0_Star,          trainer: nnUNetTrainerStd,                  dataset_id: 100, tier: A}
+    - {name: M1_Omission,      trainer: nnUNetTrainerDegradedOmissionOnly, dataset_id: 100, tier: A}
+    - {name: M2_Drift_mu0,     trainer: nnUNetTrainerDriftMu0,             dataset_id: 100, tier: A}
+    - {name: M3_Drift_muMinus, trainer: nnUNetTrainerStd,                  dataset_id: 103, tier: B}
+    - {name: M4_Drift_muPlus,  trainer: nnUNetTrainerStd,                  dataset_id: 104, tier: B}
 
 evaluation:
-  scenarios:               # contre quelles annotations on évalue
-    - {name: GT_star,       degradation: null}        # annotations propres
-    - {name: GT_minus_test, degradation: [...]}       # annotations dégradées
+  scenarios:               # un bruit par scénario, métrique appariée (pas de bruit composé)
+    - {name: GT_star,           degradation: null}                                   # propre
+    - {name: GT_minus_omission, degradation: [{family: distal_omission, r: 2, p: 0.3}]}      # Q1 topo
+    - {name: GT_minus_drift_neg, degradation: [{family: boundary_drift, r: 1, p: 0.5, mu: -0.5}]}  # Q3 μ<0
+    - {name: GT_minus_drift_pos, degradation: [{family: boundary_drift, r: 1, p: 0.5, mu: 0.5}]}   # Q3 μ>0
 ```
+
+> ⚠️ **Calibration mesurée, pas supposée.** Apparier l'instrument au bruit : omission →
+> clDice/Betti₀ ; drift → NSD@0.5 (magnitude) + ΔV signé (direction). HD95 sature, clDice est
+> aveugle au bord. Re-vérifier après tout changement de (r, p, μ) via `scripts/calibrate_noise.py`.
+
+**Familles de dégradation disponibles** (dans `scripts/degradations.py`) :
+
+| Famille | Usage | `r` (échelle) | `p` (sévérité) |
+|---|---|---|---|
+| `distal_omission` | Retire les structures fines < r (Bernoulli **par composante**) | rayon de l'ouverture (vx) | proba **par branche fine** |
+| `distal_truncation` | Élague les tronçons terminaux du squelette (Bernoulli **par tronçon**) | longueur coupée (itér.) | proba **par tronçon terminal** |
+| `boundary_drift` | Déplace la surface : **dérive systématique `μ` + jitter** (champ lissé, mm-aware) | amplitude (mm via spacing) | **fraction de surface** déplacée |
+| `homogeneous_morpho` | **Contrôle** irréaliste : érosion uniforme sans gating | épaisseur érodée (vx) | **fraction de surface** affectée |
+
+> `boundary_jitter` reste accepté : c'est un **alias de `boundary_drift` avec μ=0**.
+> `boundary_drift` **généralise et remplace** le jitter en ajoutant le biais de dérive `μ`.
+
+#### Le paramètre `μ` de `boundary_drift` — biais de frontière (état de l'art : Yao 2023 / GSD-Net)
+
+Le déplacement du bord vaut `amplitude·(μ + fluctuation)`, qui **décompose** le bruit de bord
+en une part systématique (μ) et une part irrégulière de moyenne nulle :
+
+| `μ` | Effet sur le bord | Nature | Question de recherche |
+|---|---|---|---|
+| **μ = 0** | oscille symétriquement | non biaisé → se compense → **augmentation** | **Q2** (robustesse) |
+| **μ < 0** | recule (sous-segmente) | biais systématique → **apprenable** | **Q3** (biais appris) |
+| **μ > 0** | avance (sur-segmente) | biais systématique → **apprenable** | **Q3** (biais appris) |
+
+C'est la distinction **biaisé vs non biaisé** de la littérature (Heller 2018) : un réseau est
+robuste au jitter non biaisé (μ=0), mais peut **apprendre** un biais systématique (μ≠0). Un
+seul bouton μ balaie tout l'axe. Visualiser : `--mu-sweep -1 -0.5 0 0.5 1` (cf. §8).
+
+#### Sémantique de θ = (`r`, `p`, `μ`, `seed`) — à lire attentivement
+
+- **Politique d'application : 100 %.** Le bruit est appliqué **systématiquement à toutes
+  les images** (et à tous les batches d'entraînement). `p` n'est **jamais** une probabilité
+  d'appliquer ou non la dégradation à une image — des garanties dans le code assurent qu'au
+  moins une structure/un voxel est toujours touché dès que `p > 0`.
+
+- **⚠️ `p` n'a pas le même sens selon la famille** — c'est la nuance clé :
+  - **Bruits structurels** (`distal_omission`, `distal_truncation`) : `p` est une probabilité
+    **Bernoulli par unité topologique**. `p = 0.3` ⇒ « ~30 % des **branches fines** (resp.
+    tronçons) retirées », **pas** 30 % de l'aire de l'image. Les structures *candidates* sont
+    fixées par `r` (l'ouverture/élagage), `p` décide *combien* parmi elles tombent.
+  - **Bruits de surface** (`boundary_drift`, `homogeneous_morpho`) : `p` est bien une
+    **fraction de la surface** (top-`p` des voxels de surface) — proche d'un « % de région ».
+
+- **`r` = échelle** : ce qui compte comme « fin » (omission), l'amplitude de la dérive/jitter
+  (en mm via le spacing du NIfTI), l'épaisseur érodée, la longueur élaguée.
+
+- **`μ` = biais de dérive** (`boundary_drift` uniquement) : 0 = jitter non biaisé (augmentation,
+  Q2) ; ≠0 = biais systématique apprenable (Q3). Défaut 0 → rétro-compatible avec le jitter.
+
+- **`seed` = réalisation aléatoire + reproductibilité** : fixe *où* exactement le bruit frappe
+  (quelles branches, quelles régions de surface, quel motif de jitter). Même `(family, r, p, μ, seed)`
+  ⇒ sortie identique au voxel près.
+  - Dataset101 fixe + GT⁻ d'évaluation : **seed fixe par cas** → GT⁻ figé et reproductible (tests appariés).
+  - `nnUNetTrainerDegraded` (on-the-fly) : **seed aléatoire à chaque step** → le lieu varie d'epoch
+    en epoch = diversité des réalisations = effet data augmentation.
+
+> Vérifier l'effet visuel de chaque famille (rouge = retiré, bleu = ajouté) :
+> `python scripts/visualize_degradations.py` (cf. §8).
 
 Après avoir changé `num_epochs`, relancez simplement le pipeline : les
 entraînements déjà terminés ne sont pas refaits.
@@ -397,15 +541,13 @@ entraînements déjà terminés ne sont pas refaits.
 
 ## Questions de recherche (rappel)
 
-| # | Question | Tier |
-|---|----------|------|
-| 1 | Qualité du signal vs variabilité (Fixed vs Stoch) | A |
-| 3 | Robustesse induite par le bruit stochastique | A |
-| 4 | Pénalisation injuste par une GT d'évaluation biaisée | A |
-| 6 | Asymétrie train/test de la pénalité | A |
-| 2 | Seuils de rupture (grid search) | B |
-| 5 | Morpho vs omission (grid search) | B |
-| 7 | Spécificité de la robustesse (MorphoOnly / OmissionOnly) | C |
+Plan détaillé (montages, résultats attendus, tests stat) : **`experiments_plan.md`**.
 
-Les outcomes du **tier A** sont produits par défaut. Les tiers **B** et **C**
-s'activent avec `--tiers ABC`.
+| # | Question | Modèles | Métrique appariée | Tier |
+|---|---|---|---|---|
+| Q1 | **Pénalisation artificielle** : évaluer sur GT⁻ pénalise-t-il injustement ? | `M0_Star` : GT* vs GT⁻ | clDice/Betti₀ (omission) | A |
+| Q2 | **Robustesse induite** : bruit non biaisé (μ=0) = augmentation ? | `M2_Drift_mu0` vs `M0_Star` sur GT* | NSD@0.5 | A |
+| Q3 | **Biais appris** : un biais de bord (μ≠0) s'apprend-il ? | `M3/M4_Drift_mu±` vs `M0_Star` | ΔV signé | B |
+
+`--tiers AB` lance tout. `distal_truncation` écarté (redondant avec omission) ;
+`homogeneous_morpho` n'est plus utilisé (contrôle de l'ancien design).

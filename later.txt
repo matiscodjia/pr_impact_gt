@@ -1,0 +1,24 @@
+PISTES À TRAITER PLUS TARD
+==========================
+
+[Bruits composés de plusieurs familles — pré-sélection sur petits échantillons]
+
+Problème : combiner plusieurs familles de dégradation dans un même GT⁻ (ex.
+distal_omission + boundary_drift + distal_truncation) est difficile à maîtriser :
+les effets se cumulent de façon non triviale (cf. la calibration combinée déjà
+observée — chaque famille doit être plus douce qu'isolée), et l'espace des
+combinaisons (familles × r × p × μ) explose.
+
+Proposition : avant de figer le dataset d'entraînement, réaliser des tests sur
+de PETITS ÉCHANTILLONS (quelques cas PARSE) pour balayer les combinaisons et ne
+retenir que celles qui valent la peine d'être soumises au train. Critères de
+sélection à définir, mais a priori :
+  - accord inter-annotateur dans la fenêtre (clDice ∈ [0.85,0.90] pour la part
+    topologique ; NSD@0.5mm pour la part surfacique/dérive de bord) ;
+  - effet non redondant entre familles (ne pas empiler deux bruits qui agissent
+    sur le même axe) ;
+  - réalisme (éviter les régimes que la littérature juge artefactuels, ex.
+    érosion uniforme p=1.0).
+
+Sortie attendue : une short-list de pipelines combinés calibrés → seuls ceux-là
+partent en entraînement complet (coûteux), pas tout le produit cartésien.

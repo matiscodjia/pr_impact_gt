@@ -45,29 +45,33 @@ def degrade_labels(
     output_dir : str
         Chemin de sortie pour les labels dégradés.
     degradation_configs : list[dict]
-        Pipeline de dégradations (voir ``apply_degradation_pipeline``).
+        Pipeline de dégradations formelles — chaque dict contient ``"family"``, ``"r"``, ``"p"``.
     seed : int
-        Graine aléatoire pour la reproductibilité.
+        Graine de base (chaque cas reçoit seed + index).
     """
     os.makedirs(output_dir, exist_ok=True)
 
     label_files = sorted(glob.glob(os.path.join(labels_dir, "*.nii.gz")))
     print(f"Dégradation de {len(label_files)} labels...")
     for i, d in enumerate(degradation_configs, 1):
-        params = {k: v for k, v in d.items() if k != "type"}
-        print(f"  {i}. {d['type']} — {params}")
+        params = {k: v for k, v in d.items() if k != "family"}
+        print(f"  {i}. {d['family']} — {params}")
     print(f"  seed: {seed}")
 
     n_degraded = 0
     with tqdm(enumerate(label_files), total=len(label_files), unit="cas") as pbar:
         for idx, lbl_path in pbar:
-            np.random.seed(seed + idx)
             fname = os.path.basename(lbl_path)
             nii = nib.load(lbl_path)
             data = nii.get_fdata().astype(np.float32)
+            # Espacement voxel (mm) propagé au générateur pour les familles mm-aware
+            spacing = tuple(float(s) for s in nii.header.get_zooms()[:3])
 
             before = int((data > 0).sum())
-            degraded = apply_degradation_pipeline(data[np.newaxis, ...], degradation_configs)
+            degraded = apply_degradation_pipeline(
+                data[np.newaxis, ...], degradation_configs,
+                seed_base=seed + idx, spacing=spacing,
+            )
             after = int((degraded[0] > 0).sum())
             delta = before - after
 

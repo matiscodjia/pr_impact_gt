@@ -10,7 +10,7 @@ papier).
 Usage
 -----
     python scripts/plot_convergence.py --config configs/experiment_config.yaml \
-        --trainer nnUNetTrainer250 --dataset 100 --out results/figures/convergence.png
+        --trainer nnUNetTrainerStd --dataset 100 --out results/figures/convergence.png
 """
 
 import argparse
@@ -66,7 +66,7 @@ def fold_series(results_dir: str, dataset: int, trainer: str, cfg: str) -> dict[
 def main():
     parser = argparse.ArgumentParser(description="Courbe de convergence nnU-Net")
     parser.add_argument("--config", default="configs/experiment_config.yaml")
-    parser.add_argument("--trainer", default="nnUNetTrainer250")
+    parser.add_argument("--trainer", default="nnUNetTrainerStd")
     parser.add_argument("--dataset", type=int, default=100)
     parser.add_argument("--out", default="results/figures/convergence.png")
     args = parser.parse_args()

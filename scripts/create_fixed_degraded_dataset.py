@@ -57,12 +57,16 @@ def _degrade_label(
     seed: int,
 ) -> dict:
     """Dégrade un label NIfTI avec un seed fixe, retourne des stats."""
-    np.random.seed(seed)
     nii = nib.load(src_path)
     data = nii.get_fdata().astype(np.float32)
+    # Espacement voxel (mm) propagé au générateur pour les familles mm-aware
+    spacing = tuple(float(s) for s in nii.header.get_zooms()[:3])
 
     n_voxels_before = int((data > 0).sum())
-    degraded = apply_degradation_pipeline(data[np.newaxis, ...], degradation_configs)[0]
+    degraded = apply_degradation_pipeline(
+        data[np.newaxis, ...], degradation_configs,
+        seed_base=seed, spacing=spacing,
+    )[0]
     n_voxels_after = int((degraded > 0).sum())
 
     nib.save(nib.Nifti1Image(degraded, nii.affine, nii.header), dst_path)
@@ -116,8 +120,9 @@ def main():
     print(f"Dataset : {dataset_cfg.get('name', f'Dataset{fixed_id:03d}')}")
     print(f"Pipeline de dégradations ({len(degradation_configs)} étape(s)) :")
     for i, d in enumerate(degradation_configs, 1):
-        params = {k: v for k, v in d.items() if k != "type"}
-        print(f"  {i}. {d['type']} — {params}")
+        family = d.get("family", d.get("type", "?"))
+        params = {k: v for k, v in d.items() if k not in ("family", "type")}
+        print(f"  {i}. {family} — {params}")
     print(f"Seed    : {args.seed} (+ index par cas)")
 
     for subdir in ("imagesTr", "labelsTr", "imagesTs", "labelsTs"):
@@ -170,7 +175,9 @@ def main():
 
     dataset_json["name"] = dataset_cfg.get("name", f"Dataset{fixed_id:03d}_PARSE_Fixed")
     pipeline_summary = " | ".join(
-        f"{d['type']} " + " ".join(f"{k}={v}" for k, v in d.items() if k != "type")
+        f"{d.get('family', d.get('type', '?'))} " + " ".join(
+            f"{k}={v}" for k, v in d.items() if k not in ("family", "type")
+        )
         for d in degradation_configs
     )
     dataset_json["description"] = (

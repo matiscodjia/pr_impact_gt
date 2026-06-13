@@ -34,7 +34,8 @@ import yaml
 
 sys.path.insert(0, os.path.dirname(__file__))
 import results_store as rs
-from cross_evaluate import compute_betti0, compute_cldice, compute_hd95, compute_nsd
+from cross_evaluate import (PredFeatures, compute_betti0, compute_cldice, compute_hd95,
+                            compute_nsd, evaluate_pair_cached)
 
 PLANS = "nnUNetPlans"
 
@@ -118,15 +119,20 @@ def collect_oof(model, clean_dir, results_dir, cfg, scenarios, done, num_epochs)
 
         for pred_path in sorted(glob.glob(os.path.join(val_dir, "*.nii.gz"))):
             case = os.path.basename(pred_path)
-            for sc in scenarios:
-                key = (model["name"], model["trainer"], int(model["dataset_id"]),
-                       fold, sc["name"], case, "oof")
-                if key in done:
-                    continue
+            # Scénarios encore à calculer pour ce cas : la prédiction (squelette,
+            # EDT…) n'est chargée et factorisée qu'une fois pour tous (PredFeatures).
+            todo = [sc for sc in scenarios
+                    if (model["name"], model["trainer"], int(model["dataset_id"]),
+                        fold, sc["name"], case, "oof") not in done]
+            if not todo:
+                continue
+            pred_nii = nib.load(pred_path)
+            pf = PredFeatures(pred_nii.get_fdata(), spacing=pred_nii.header.get_zooms()[:3])
+            for sc in todo:
                 gt_path = os.path.join(scenario_gt_dir(clean_dir, "labelsTr", sc), case)
-                metrics = evaluate_pair(pred_path, gt_path)
-                if metrics is None:
+                if not os.path.exists(gt_path):
                     continue
+                metrics = evaluate_pair_cached(pf, nib.load(gt_path).get_fdata())
                 rows.append(rs.make_row(
                     model=model["name"], trainer=model["trainer"],
                     dataset=model["dataset_id"], fold=fold, scenario=sc["name"],
@@ -145,15 +151,18 @@ def collect_test(model, clean_dir, scenarios, done, num_epochs):
     rows = []
     for pred_path in sorted(glob.glob(os.path.join(pred_dir, "*.nii.gz"))):
         case = os.path.basename(pred_path)
-        for sc in scenarios:
-            key = (model["name"], model["trainer"], int(model["dataset_id"]),
-                   -1, sc["name"], case, "test")
-            if key in done:
-                continue
+        todo = [sc for sc in scenarios
+                if (model["name"], model["trainer"], int(model["dataset_id"]),
+                    -1, sc["name"], case, "test") not in done]
+        if not todo:
+            continue
+        pred_nii = nib.load(pred_path)
+        pf = PredFeatures(pred_nii.get_fdata(), spacing=pred_nii.header.get_zooms()[:3])
+        for sc in todo:
             gt_path = os.path.join(scenario_gt_dir(clean_dir, "labelsTs", sc), case)
-            metrics = evaluate_pair(pred_path, gt_path)
-            if metrics is None:
+            if not os.path.exists(gt_path):
                 continue
+            metrics = evaluate_pair_cached(pf, nib.load(gt_path).get_fdata())
             rows.append(rs.make_row(
                 model=model["name"], trainer=model["trainer"],
                 dataset=model["dataset_id"], fold=-1, scenario=sc["name"],

@@ -25,12 +25,15 @@ import os
 import sys
 import tempfile
 
+import nibabel as nib
 import numpy as np
 import pandas as pd
 import yaml
+from tqdm import tqdm
 
 sys.path.insert(0, os.path.dirname(__file__))
-from collect_metrics import resolve_dataset_dir, resolve_results_dir, scenario_gt_dir, evaluate_pair
+from collect_metrics import resolve_dataset_dir, resolve_results_dir, scenario_gt_dir
+from cross_evaluate import PredFeatures, evaluate_pair_cached
 
 PLANS = "nnUNetPlans"
 
@@ -172,21 +175,25 @@ def main():
     print(f"Calibration : {len(snapshots)} snapshots × {len(val_ids)} cas val (fold {fold}), device={device}")
 
     rows = []
-    for ckpt in snapshots:
+    for ckpt in tqdm(snapshots, desc="Snapshots", unit="ckpt"):
         ep = _epoch_of(ckpt)
         ckpt_name = os.path.basename(ckpt)
         tmp = tempfile.mkdtemp(prefix=f"calib_ep{ep}_")
-        print(f"\n[epoch {ep}] prédiction val ({ckpt_name})…")
+        tqdm.write(f"\n[epoch {ep}] prédiction val ({ckpt_name})…")
         _predict_val(model_dir, fold, ckpt_name, images_tr, val_ids, tmp, device)
-        for cid in val_ids:
+        # Métriques : squelette/EDT de la prédiction calculés une seule fois par
+        # cas (PredFeatures), réutilisés sur tous les scénarios GT.
+        for cid in tqdm(val_ids, desc=f"Métriques ep{ep}", unit="cas", leave=False):
             pred = os.path.join(tmp, f"{cid}.nii.gz")
             if not os.path.exists(pred):
                 continue
+            pred_nii = nib.load(pred)
+            pf = PredFeatures(pred_nii.get_fdata(), spacing=pred_nii.header.get_zooms()[:3])
             for sc in scenarios:
                 gt = os.path.join(scenario_gt_dir(clean_dir, "labelsTr", sc), f"{cid}.nii.gz")
-                m = evaluate_pair(pred, gt)
-                if m is None:
+                if not os.path.exists(gt):
                     continue
+                m = evaluate_pair_cached(pf, nib.load(gt).get_fdata())
                 rows.append({"trainer": trainer, "fold": fold, "epoch": ep,
                              "scenario": sc["name"], "case": f"{cid}.nii.gz", **m})
         if not args.keep_preds:
