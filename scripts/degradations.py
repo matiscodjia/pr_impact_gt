@@ -248,9 +248,26 @@ def generate(mask: np.ndarray, family: str, r: float, p: float, seed: int,
         )
     rng = np.random.default_rng(seed)
     fn = _REGISTRY[family]
-    if fn is _boundary_drift:
-        return fn(mask, r, p, rng, spacing, corr_len, mu)
-    return fn(mask, r, p, rng, spacing, corr_len)
+    needs_mu = fn is _boundary_drift
+
+    def _call(m):
+        return fn(m, r, p, rng, spacing, corr_len, mu) if needs_mu \
+            else fn(m, r, p, rng, spacing, corr_len)
+
+    # Restreindre le calcul à la bbox de la structure (+marge) : la dégradation est LOCALE
+    # à la surface — inutile de calculer EDT/champs sur tout le volume (souvent 512³).
+    # La marge couvre r, corr_len et l'amplitude max (mu) → résultat équivalent au plein.
+    mask_bool = mask > 0.5
+    if not mask_bool.any():
+        return _call(mask).astype(np.uint8)
+    margin = int(2 * corr_len + r * (3 + 2 * abs(mu)) + 6)
+    coords = np.argwhere(mask_bool)
+    lo = np.maximum(coords.min(0) - margin, 0)
+    hi = np.minimum(coords.max(0) + margin + 1, mask.shape)
+    sl = tuple(slice(int(a), int(b)) for a, b in zip(lo, hi))
+    out = np.zeros(mask.shape, dtype=np.uint8)
+    out[sl] = _call(mask[sl]).astype(np.uint8)
+    return out
 
 
 def apply_degradation_pipeline(

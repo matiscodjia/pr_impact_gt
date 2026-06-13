@@ -34,6 +34,8 @@ import glob
 import json
 import os
 import sys
+from functools import partial
+from multiprocessing import Pool
 
 import nibabel as nib
 import numpy as np
@@ -73,6 +75,14 @@ def _degrade_label(
     return {"before": n_voxels_before, "after": n_voxels_after}
 
 
+def _degrade_label_worker(idx_src, labels_out_dir, degradation_configs, seed):
+    """Worker parallèle : dégrade labelsTr/<fname> avec seed fixe. Renvoie delta_volume."""
+    idx, src = idx_src
+    dst = os.path.join(labels_out_dir, os.path.basename(src))
+    stats = _degrade_label(src, dst, degradation_configs, seed + idx)
+    return stats["before"] - stats["after"]
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Crée un DatasetXXX_PARSE_Fixed avec labels d'entraînement dégradés fixes"
@@ -95,6 +105,10 @@ def main():
     parser.add_argument(
         "--seed", type=int, default=42,
         help="Seed de base — chaque cas reçoit seed + index ordinal",
+    )
+    parser.add_argument(
+        "--workers", type=int, default=max(1, (os.cpu_count() or 2) // 2),
+        help="Processus parallèles (défaut : moitié des cœurs). 1 = séquentiel.",
     )
     args = parser.parse_args()
 
@@ -134,24 +148,23 @@ def main():
         _symlink(src, os.path.join(args.output_dir, "imagesTr", os.path.basename(src)))
     print(f"  imagesTr : {len(images_tr)} liens créés")
 
-    # ── labelsTr : dégradations fixes par cas ──
+    # ── labelsTr : dégradations fixes par cas (parallèle) ──
     labels_tr = sorted(glob.glob(os.path.join(args.source_dir, "labelsTr", "*.nii.gz")))
+    labels_out = os.path.join(args.output_dir, "labelsTr")
+    work = partial(_degrade_label_worker, labels_out_dir=labels_out,
+                   degradation_configs=degradation_configs, seed=args.seed)
+    items = list(enumerate(labels_tr))
     delta_voxels = []
-    n_degraded = 0
-    with tqdm(enumerate(labels_tr), total=len(labels_tr), desc="labelsTr (dégradation)", unit="cas") as pbar:
-        for idx, src in pbar:
-            fname = os.path.basename(src)
-            dst = os.path.join(args.output_dir, "labelsTr", fname)
-            stats = _degrade_label(
-                src, dst,
-                degradation_configs=degradation_configs,
-                seed=args.seed + idx,
-            )
-            delta = stats["before"] - stats["after"]
-            delta_voxels.append(delta)
-            if delta != 0:
-                n_degraded += 1
-            pbar.set_postfix(case=fname, delta=f"{-delta:+d}", degraded=f"{n_degraded}/{idx+1}")
+    print(f"  labelsTr : dégradation de {len(items)} cas ({args.workers} worker·s)...")
+    if args.workers > 1:
+        with Pool(args.workers) as pool:
+            for delta in tqdm(pool.imap_unordered(work, items), total=len(items),
+                              desc="labelsTr (dégradation)", unit="cas"):
+                delta_voxels.append(delta)
+    else:
+        for item in tqdm(items, desc="labelsTr (dégradation)", unit="cas"):
+            delta_voxels.append(work(item))
+    n_degraded = sum(1 for d in delta_voxels if d != 0)
 
     if delta_voxels:
         print(f"  labelsTr : {len(labels_tr)} labels | {n_degraded} effectivement dégradés | "

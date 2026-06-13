@@ -21,6 +21,8 @@ Usage
 import argparse
 import glob
 import os
+from functools import partial
+from multiprocessing import Pool
 
 import nibabel as nib
 import numpy as np
@@ -30,57 +32,58 @@ from tqdm import tqdm
 from degradations import apply_degradation_pipeline
 
 
+def _degrade_one_case(idx_path, output_dir, degradation_configs, seed):
+    """Dégrade un seul label (worker parallèle). Renvoie (fname, delta_volume)."""
+    idx, lbl_path = idx_path
+    fname = os.path.basename(lbl_path)
+    nii = nib.load(lbl_path)
+    data = nii.get_fdata().astype(np.float32)
+    spacing = tuple(float(s) for s in nii.header.get_zooms()[:3])  # mm-aware
+
+    before = int((data > 0).sum())
+    degraded = apply_degradation_pipeline(
+        data[np.newaxis, ...], degradation_configs,
+        seed_base=seed + idx, spacing=spacing,
+    )
+    after = int((degraded[0] > 0).sum())
+
+    nib.save(nib.Nifti1Image(degraded[0], nii.affine, nii.header),
+             os.path.join(output_dir, fname))
+    return fname, before - after
+
+
 def degrade_labels(
     labels_dir: str,
     output_dir: str,
     degradation_configs: list,
     seed: int = 42,
+    workers: int = 1,
 ) -> None:
-    """Génère des labels dégradés à partir d'un dossier de labels propres.
+    """Génère des labels dégradés (en parallèle sur les cas) depuis un dossier propre.
 
-    Parameters
-    ----------
-    labels_dir : str
-        Chemin vers le dossier contenant les labels propres (.nii.gz).
-    output_dir : str
-        Chemin de sortie pour les labels dégradés.
-    degradation_configs : list[dict]
-        Pipeline de dégradations formelles — chaque dict contient ``"family"``, ``"r"``, ``"p"``.
-    seed : int
-        Graine de base (chaque cas reçoit seed + index).
+    Chaque cas est indépendant (seed = seed_base + index) → parallélisable sans état partagé.
     """
     os.makedirs(output_dir, exist_ok=True)
-
     label_files = sorted(glob.glob(os.path.join(labels_dir, "*.nii.gz")))
-    print(f"Dégradation de {len(label_files)} labels...")
+    print(f"Dégradation de {len(label_files)} labels  ({workers} worker·s)...")
     for i, d in enumerate(degradation_configs, 1):
         params = {k: v for k, v in d.items() if k != "family"}
         print(f"  {i}. {d['family']} — {params}")
     print(f"  seed: {seed}")
 
+    work = partial(_degrade_one_case, output_dir=output_dir,
+                   degradation_configs=degradation_configs, seed=seed)
+    items = list(enumerate(label_files))
     n_degraded = 0
-    with tqdm(enumerate(label_files), total=len(label_files), unit="cas") as pbar:
-        for idx, lbl_path in pbar:
-            fname = os.path.basename(lbl_path)
-            nii = nib.load(lbl_path)
-            data = nii.get_fdata().astype(np.float32)
-            # Espacement voxel (mm) propagé au générateur pour les familles mm-aware
-            spacing = tuple(float(s) for s in nii.header.get_zooms()[:3])
-
-            before = int((data > 0).sum())
-            degraded = apply_degradation_pipeline(
-                data[np.newaxis, ...], degradation_configs,
-                seed_base=seed + idx, spacing=spacing,
-            )
-            after = int((degraded[0] > 0).sum())
-            delta = before - after
-
-            if delta != 0:
-                n_degraded += 1
-            pbar.set_postfix(case=fname, delta=f"{-delta:+d}", degraded=f"{n_degraded}/{idx+1}")
-
-            out_nii = nib.Nifti1Image(degraded[0], nii.affine, nii.header)
-            nib.save(out_nii, os.path.join(output_dir, fname))
+    if workers > 1:
+        with Pool(workers) as pool:
+            for fname, delta in tqdm(pool.imap_unordered(work, items),
+                                     total=len(items), unit="cas"):
+                n_degraded += int(delta != 0)
+    else:
+        for item in tqdm(items, unit="cas"):
+            _, delta = work(item)
+            n_degraded += int(delta != 0)
 
     print(f"  -> {len(label_files)} labels sauvegardés ({n_degraded} effectivement dégradés) dans {output_dir}")
 
@@ -104,6 +107,10 @@ def main():
     )
     parser.add_argument(
         "--seed", type=int, default=42, help="Graine aléatoire"
+    )
+    parser.add_argument(
+        "--workers", type=int, default=max(1, (os.cpu_count() or 2) // 2),
+        help="Processus parallèles (défaut : moitié des cœurs). 1 = séquentiel.",
     )
     args = parser.parse_args()
 
@@ -138,6 +145,7 @@ def main():
                 output_dir=output_dir,
                 degradation_configs=deg,
                 seed=args.seed,
+                workers=args.workers,
             )
 
     print("\nGénération terminée.")
