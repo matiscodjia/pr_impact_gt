@@ -82,7 +82,9 @@ echo ""
 echo "Installation du custom trainer..."
 NNUNET_TRAINER_DIR="$(python -c "import nnunetv2; import os; print(os.path.join(nnunetv2.__path__[0], 'training', 'nnUNetTrainer'))")"
 cp "${PROJECT_DIR}/custom_trainers/nnUNetTrainerDegraded.py" "${NNUNET_TRAINER_DIR}/"
-echo "  -> Copié dans ${NNUNET_TRAINER_DIR}/"
+# Le trainer importe degradations.py → le copier À CÔTÉ (le trainer le résout via son propre dossier).
+cp "${PROJECT_DIR}/scripts/degradations.py" "${NNUNET_TRAINER_DIR}/"
+echo "  -> Copiés (trainer + degradations.py) dans ${NNUNET_TRAINER_DIR}/"
 
 # ── 8. Vérification ──
 echo ""

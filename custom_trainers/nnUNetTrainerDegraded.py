@@ -46,13 +46,23 @@ import yaml
 
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
 
-# Le générateur formel est dans scripts/degradations.py — on l'importe en ajoutant
-# le dossier scripts/ au path si nécessaire.
-_SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
-if _SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, _SCRIPTS_DIR)
+# Le générateur formel vit dans scripts/degradations.py en dev, MAIS ce trainer est COPIÉ
+# dans l'arbre nnU-Net à l'installation (setup_env.sh) → le chemin relatif ne tient plus.
+# On cherche donc degradations.py à plusieurs emplacements et on prend le premier valide.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_CANDIDATE_SCRIPT_DIRS = [
+    _HERE,                                                               # installé : copié à côté du trainer
+    os.path.join(os.path.dirname(os.path.dirname(_HERE)), "scripts"),    # dev : custom_trainers/ ↔ scripts/
+    os.path.join(os.getcwd(), "scripts"),                               # lancé depuis la racine du projet
+    os.environ.get("PR_IMPACT_SCRIPTS", ""),                            # override explicite
+]
+for _d in _CANDIDATE_SCRIPT_DIRS:
+    if _d and os.path.isfile(os.path.join(_d, "degradations.py")):
+        if _d not in sys.path:
+            sys.path.insert(0, _d)
+        break
 
-from degradations import generate  # noqa: E402  (import after sys.path manipulation)
+from degradations import generate  # noqa: E402  (import après manipulation de sys.path)
 
 
 def _num_epochs_from_config(default: int = 250) -> int:
