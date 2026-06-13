@@ -35,7 +35,7 @@ import results_store as rs
 from full_statistical_analysis import build_tests
 
 ALL_FOLDS = 5
-TIER_A = ["Model_Star", "Model_Minus_Stoch", "Model_Minus_Fixed"]
+TIER_A = ["M0_Star", "M1_Omission", "M2_Drift_mu0"]
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -113,49 +113,57 @@ def _series(p: pd.DataFrame, model: str, scenario: str, metric: str) -> pd.Serie
             .set_index("case")[metric])
 
 
-def outcome_tests(p: pd.DataFrame, metric: str = "cldice") -> pd.DataFrame:
-    """Comparaisons pré-spécifiées (outcomes 1,3,4,6) avec IC bootstrap."""
+# Métrique appariée par scénario de bruit (cf. experiments_plan.md) :
+#   omission (topologique) → clDice, betti0 ; drift (surface) → nsd05, volume_delta.
+_OMISSION_METRICS = ("cldice", "betti0")
+_DRIFT_METRICS = ("nsd05", "volume_delta")
+
+
+def outcome_tests(p: pd.DataFrame, metric: str | None = None) -> pd.DataFrame:
+    """Tests pré-spécifiés Q1/Q2/Q3 (M0–M4), chacun avec sa métrique APPARIÉE.
+
+    (Le paramètre ``metric`` est ignoré : chaque question fixe ses propres métriques.)
+    """
     rows = []
-
-    def add(label, a, b):
-        res = _paired(a, b, metric)
-        if res:
-            rows.append({"outcome": label, "metric": metric, **res})
-
     models = set(p["model"].unique())
     scen = set(p["scenario"].unique())
     has = lambda *m: set(m).issubset(models)
+    S = lambda model, sc, met: _series(p, model, sc, met)
 
-    # Outcome 1 — qualité vs variabilité : Fixed vs Stoch sur GT_star
-    if has("Model_Minus_Fixed", "Model_Minus_Stoch") and "GT_star" in scen:
-        add("1_quality_vs_variability",
-            _series(p, "Model_Minus_Fixed", "GT_star", metric),
-            _series(p, "Model_Minus_Stoch", "GT_star", metric))
+    def add(question, label, a, b, met):
+        res = _paired(a, b, met)
+        if res:
+            rows.append({"question": question, "outcome": label, "metric": met, **res})
 
-    # Outcome 3 — robustesse induite : Star vs Stoch sur GT_minus_test
-    if has("Model_Star", "Model_Minus_Stoch") and "GT_minus_test" in scen:
-        add("3_stochastic_robustness",
-            _series(p, "Model_Star", "GT_minus_test", metric),
-            _series(p, "Model_Minus_Stoch", "GT_minus_test", metric))
+    # ── Q1 — la GT⁻ pénalise-t-elle M0 (entraîné propre) ? GT_star vs GT⁻ ──
+    if has("M0_Star"):
+        if {"GT_star", "GT_minus_omission"}.issubset(scen):
+            for met in _OMISSION_METRICS:
+                add("Q1", "Q1_omission_penalty",
+                    S("M0_Star", "GT_star", met), S("M0_Star", "GT_minus_omission", met), met)
+        for sc in ("GT_minus_drift_neg", "GT_minus_drift_pos"):
+            if {"GT_star", sc}.issubset(scen):
+                for met in _DRIFT_METRICS:
+                    add("Q1", f"Q1_{sc}_penalty",
+                        S("M0_Star", "GT_star", met), S("M0_Star", sc, met), met)
 
-    # Outcome 4 — pénalité injuste : Star GT_star vs GT_minus_test
-    if has("Model_Star") and {"GT_star", "GT_minus_test"}.issubset(scen):
-        add("4_evaluation_penalty",
-            _series(p, "Model_Star", "GT_star", metric),
-            _series(p, "Model_Star", "GT_minus_test", metric))
+    # ── Q2 — robustesse/augmentation (μ=0) : M2 vs M0, évalués sur GT* propre ──
+    if has("M0_Star", "M2_Drift_mu0") and "GT_star" in scen:
+        for met in ("nsd05", "cldice"):
+            add("Q2", "Q2_robustness",
+                S("M0_Star", "GT_star", met), S("M2_Drift_mu0", "GT_star", met), met)
 
-    # Outcome 6 — asymétrie train/test : pénalité train vs pénalité eval (par cas)
-    if has("Model_Star", "Model_Minus_Fixed") and {"GT_star", "GT_minus_test"}.issubset(scen):
-        star_star = _series(p, "Model_Star", "GT_star", metric)
-        fixed_star = _series(p, "Model_Minus_Fixed", "GT_star", metric)
-        star_minus = _series(p, "Model_Star", "GT_minus_test", metric)
-        ct = star_star.index.intersection(fixed_star.index)
-        ce = star_star.index.intersection(star_minus.index)
-        common = ct.intersection(ce)
-        if len(common) >= 5:
-            train_pen = (star_star.loc[common] - fixed_star.loc[common])
-            eval_pen = (star_star.loc[common] - star_minus.loc[common])
-            add("6_train_vs_eval_penalty", train_pen, eval_pen)
+    # ── Q3 — biais appris : sur la GT⁻ biaisée, Mk colle mieux que M0 ; et dévie sur GT* ──
+    for model, sc in [("M3_Drift_muMinus", "GT_minus_drift_neg"),
+                      ("M4_Drift_muPlus", "GT_minus_drift_pos")]:
+        if has("M0_Star", model) and sc in scen:
+            for met in ("nsd05", "cldice"):
+                add("Q3", f"Q3_{model}_fits_bias",
+                    S("M0_Star", sc, met), S(model, sc, met), met)
+            if "GT_star" in scen:  # déviation de volume sur le vrai (signe du biais appris)
+                add("Q3", f"Q3_{model}_deviation",
+                    S("M0_Star", "GT_star", "volume_delta"),
+                    S(model, "GT_star", "volume_delta"), "volume_delta")
 
     return pd.DataFrame(rows)
 
@@ -171,9 +179,7 @@ def make_figures(p: pd.DataFrame, figures_dir: str) -> None:
     except Exception as e:
         print(f"  [figures] import aggregate_results impossible: {e}")
         return
-    for fn in (agg.plot_quality_vs_variability, agg.plot_stochastic_robustness,
-               agg.plot_evaluation_penalty, agg.plot_train_test_asymmetry,
-               agg.plot_robustness_specificity):
+    for fn in (agg.plot_metric_boxplots, agg.plot_question_summary):
         try:
             fn(p, figures_dir)
         except Exception as e:
@@ -233,17 +239,18 @@ def write_status(results_dir: str, df: pd.DataFrame, outcomes: pd.DataFrame,
     lines.append("\n## Orchestrateur (ledger)\n")
     lines.append(_ledger_summary(results_dir))
 
-    lines.append("\n## Outcomes pré-spécifiés (CLDice, OOF) — Wilcoxon apparié + IC bootstrap 95%\n")
+    lines.append("\n## Questions Q1/Q2/Q3 (OOF) — Wilcoxon apparié + IC bootstrap 95% — métrique appariée\n")
     if outcomes is not None and not outcomes.empty:
-        lines.append("| Outcome | n | Δ (b−a) | IC 95% | Cohen's d | p |")
-        lines.append("|---|---|---|---|---|---|")
+        lines.append("| Q | Outcome | Métrique | n | Δ (b−a) | IC 95% | Cohen's d | p |")
+        lines.append("|---|---|---|---|---|---|---|---|")
         for _, r in outcomes.iterrows():
             ci = f"[{r['ci_lo']:+.3f}, {r['ci_hi']:+.3f}]" if pd.notna(r["ci_lo"]) else "—"
             d = f"{r['cohens_d']:+.2f}" if pd.notna(r["cohens_d"]) else "—"
             pv = f"{r['p_value']:.4f}" if pd.notna(r["p_value"]) else "—"
-            lines.append(f"| {r['outcome']} | {int(r['n'])} | {r['delta']:+.3f} | {ci} | {d} | {pv} |")
+            lines.append(f"| {r.get('question','—')} | {r['outcome']} | {r['metric']} | "
+                         f"{int(r['n'])} | {r['delta']:+.3f} | {ci} | {d} | {pv} |")
     else:
-        lines.append("_Pas assez de données appariées pour les outcomes (n<5)._")
+        lines.append("_Pas assez de données appariées pour les questions (n<5)._")
 
     lines.append(f"\n_Généré à partir de `{rs.CSV_NAME}` — "
                  f"commit `{rs.git_commit()}`, {rs.now_iso()}._")

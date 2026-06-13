@@ -1,0 +1,71 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\citation{heller2018imperfect}
+\citation{yao2023markov}
+\citation{gsdnet2025}
+\citation{shit2021cldice}
+\citation{isensee2021nnunet}
+\citation{parse2022}
+\citation{nikolov2018nsd}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
+\newlabel{sec:related}{{2}{2}{Related Work}{section.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{Imperfect labels.}{2}{section*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Boundary perturbation models.}{2}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Topology-aware metrics.}{2}{section*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Framework and data.}{2}{section*.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Formalism}{2}{section.3}\protected@file@percent }
+\newlabel{sec:formalism}{{3}{2}{Formalism}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}The annotation-noise operator}{2}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Families}{2}{subsection.3.2}\protected@file@percent }
+\citation{heller2018imperfect}
+\citation{heller2018imperfect}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {The bias axis $\mu $ on a real pulmonary-artery tree.} Red = removed voxels (boundary receded), blue = added (boundary advanced). From left to right $\mu =-1,\,-0.5,\,0,\,+0.5,\,+1$: under-segmentation $\to $ balanced jitter $\to $ over-segmentation. The inter-annotator agreement (clDice, NSD@0.5\,mm) is annotated under each view, showing the operating range stays realistic. A single parameter spans augmentation ($\mu =0$, Q2) and learnable bias ($\mu \neq  0$, Q3).}}{3}{figure.caption.7}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:musweep}{{1}{3}{\textbf {The bias axis $\mu $ on a real pulmonary-artery tree.} Red = removed voxels (boundary receded), blue = added (boundary advanced). From left to right $\mu =-1,\,-0.5,\,0,\,+0.5,\,+1$: under-segmentation $\to $ balanced jitter $\to $ over-segmentation. The inter-annotator agreement (clDice, NSD@0.5\,mm) is annotated under each view, showing the operating range stays realistic. A single parameter spans augmentation ($\mu =0$, Q2) and learnable bias ($\mu \neq 0$, Q3)}{figure.caption.7}{}}
+\@writefile{toc}{\contentsline {paragraph}{Topological: \texttt  {distal\_omission}.}{3}{section*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Surface/directional: \texttt  {boundary\_drift}.}{3}{section*.6}\protected@file@percent }
+\newlabel{eq:drift}{{3}{3}{Surface/directional: \texttt {boundary\_drift}}{equation.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}The bias axis $\mu $}{3}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Methodology}{3}{section.4}\protected@file@percent }
+\newlabel{sec:methodology}{{4}{3}{Methodology}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Guiding principles}{3}{subsection.4.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \textbf  {Signatures of the noise families} (3D). Voxel counts in the titles expose the bias: \texttt  {distal\_omission}, \texttt  {distal\_truncation} and \texttt  {homogeneous\_morpho} only remove ($-N/+0$, biased), whereas \texttt  {boundary\_drift} at $\mu =0$ removes and adds in near-equal amounts (unbiased) -- the visual fingerprint of zero-mean noise (cf.~Heller et al.~\cite  {heller2018imperfect}).}}{4}{figure.caption.8}\protected@file@percent }
+\newlabel{fig:families}{{2}{4}{\textbf {Signatures of the noise families} (3D). Voxel counts in the titles expose the bias: \texttt {distal\_omission}, \texttt {distal\_truncation} and \texttt {homogeneous\_morpho} only remove ($-N/+0$, biased), whereas \texttt {boundary\_drift} at $\mu =0$ removes and adds in near-equal amounts (unbiased) -- the visual fingerprint of zero-mean noise (cf.~Heller et al.~\cite {heller2018imperfect})}{figure.caption.8}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Instrument--noise pairing. The off-axis (witness) metric should stay flat; for the drift, surface and topology are coupled on thin vessels (Sec.~\ref {sec:coupling}).}}{4}{table.caption.9}\protected@file@percent }
+\newlabel{tab:pairing}{{1}{4}{Instrument--noise pairing. The off-axis (witness) metric should stay flat; for the drift, surface and topology are coupled on thin vessels (Sec.~\ref {sec:coupling})}{table.caption.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Calibration to inter-observer agreement}{4}{subsection.4.2}\protected@file@percent }
+\newlabel{sec:calib}{{4.2}{4}{Calibration to inter-observer agreement}{subsection.4.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Models and training regimes}{4}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Research questions}{4}{subsection.4.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Experimental matrix (nnU-Net, $500$ epochs).}}{5}{table.caption.10}\protected@file@percent }
+\newlabel{tab:models}{{2}{5}{Experimental matrix (nnU-Net, $500$ epochs)}{table.caption.10}{}}
+\@writefile{toc}{\contentsline {paragraph}{Q1 -- Artificial penalty.}{5}{section*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Q2 -- Robustness / augmentation.}{5}{section*.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Q3 -- Learned bias.}{5}{section*.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}The thin-vessel coupling}{5}{subsection.4.5}\protected@file@percent }
+\newlabel{sec:coupling}{{4.5}{5}{The thin-vessel coupling}{subsection.4.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Results}{5}{section.5}\protected@file@percent }
+\newlabel{sec:results}{{5}{5}{Results}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Noise calibration (acquired)}{5}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Q1 / Q2 / Q3 (pending experiments)}{5}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Discussion}{5}{section.6}\protected@file@percent }
+\newlabel{sec:discussion}{{6}{5}{Discussion}{section.6}{}}
+\@writefile{toc}{\contentsline {paragraph}{A metrological motivation.}{5}{section*.14}\protected@file@percent }
+\bibcite{heller2018imperfect}{1}
+\bibcite{yao2023markov}{2}
+\bibcite{gsdnet2025}{3}
+\bibcite{shit2021cldice}{4}
+\bibcite{isensee2021nnunet}{5}
+\bibcite{parse2022}{6}
+\@writefile{toc}{\contentsline {paragraph}{Which noise mis-ranks models.}{6}{section*.15}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Ethical Inquiry}{6}{section.7}\protected@file@percent }
+\newlabel{sec:ethics}{{7}{6}{Ethical Inquiry}{section.7}{}}
+\@writefile{toc}{\contentsline {paragraph}{Rankings under noisy references may not be real.}{6}{section*.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Annotation quality is an ethical responsibility, not a logistics detail.}{6}{section*.17}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Recommendations for evaluation practice.}{6}{section*.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8}Conclusion}{6}{section.8}\protected@file@percent }
+\bibcite{nikolov2018nsd}{7}
+\gdef \@abspage@last{7}
