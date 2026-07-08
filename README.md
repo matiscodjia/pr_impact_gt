@@ -402,21 +402,22 @@ nnUNetv2_plan_and_preprocess -d 100 --verify_dataset_integrity
 python scripts/calibrate_noise.py --n-cases 4
 
 # 3) GT⁻ d'ÉVALUATION (scénarios : omission r2p0.3, drift μ−0.5, drift μ+0.5)
+#    --workers : parallélise sur les cas (défaut = moitié des cœurs). ~10-15 min au total.
 python scripts/generate_degraded_dataset.py \
     --dataset_dir "$nnUNet_raw/Dataset100_PARSE" \
-    --config configs/experiment_config.yaml --seed 42
+    --config configs/experiment_config.yaml --seed 42 --workers 16
 
 # 4) Datasets d'ENTRAÎNEMENT figés pour Q3 (drift μ±)
 python scripts/create_fixed_degraded_dataset.py --dataset_id 103 \
     --source_dir "$nnUNet_raw/Dataset100_PARSE" \
     --output_dir "$nnUNet_raw/Dataset103_PARSE_DriftMuMinus" \
-    --config configs/experiment_config.yaml --seed 42
+    --config configs/experiment_config.yaml --seed 42 --workers 16
 nnUNetv2_plan_and_preprocess -d 103 --verify_dataset_integrity
 
 python scripts/create_fixed_degraded_dataset.py --dataset_id 104 \
     --source_dir "$nnUNet_raw/Dataset100_PARSE" \
     --output_dir "$nnUNet_raw/Dataset104_PARSE_DriftMuPlus" \
-    --config configs/experiment_config.yaml --seed 42
+    --config configs/experiment_config.yaml --seed 42 --workers 16
 nnUNetv2_plan_and_preprocess -d 104 --verify_dataset_integrity
 
 # 5) Entraînement (500 ep, reprenable) + collecte métriques + rapport — tiers A puis B

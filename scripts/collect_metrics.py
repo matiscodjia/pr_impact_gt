@@ -12,8 +12,9 @@ en confirmation.
   on l'évalue aussi, tagué ``eval_kind=test``.
 
 Toutes les prédictions, quel que soit le modèle/dataset d'entraînement, sont
-évaluées contre la **GT propre canonique du Dataset source** (``GT_star``) et sa
-version dégradée déterministe (``GT_minus_test``), par appariement de nom de fichier.
+évaluées contre la **GT propre** (``GT_star``) et chaque scénario dégradé déterministe
+défini dans ``evaluation.scenarios`` (``GT_minus_omission``, ``GT_minus_drift_*``),
+par appariement de nom de fichier.
 
 La collecte ne calcule que les clés **absentes** de la table maîtresse : relancer
 après une interruption est sûr et bon marché.
@@ -173,12 +174,9 @@ def collect_test(model, clean_dir, scenarios, done, num_epochs):
 
 
 def _model_pred_dir(model_name: str) -> str:
-    """Convention de dossier de prédictions test (cf. run_pipeline.sh)."""
-    return {
-        "Model_Star": "model_star",
-        "Model_Minus_Stoch": "model_minus_stoch",
-        "Model_Minus_Fixed": "model_minus_fixed",
-    }.get(model_name, model_name.lower())
+    """Convention de dossier de prédictions test : nom du modèle en minuscules
+    (ex. M0_Star → m0_star)."""
+    return model_name.lower()
 
 
 def main():

@@ -31,7 +31,9 @@ from datetime import datetime, timezone
 import pandas as pd
 
 # ── Schéma canonique ──
-METRICS = ["cldice", "hd95", "nsd", "betti0"]
+# nsd   = NSD@2mm (tolérance clinique) ; nsd05 = NSD@0.5mm (sous-voxel, sensible au drift)
+# volume_delta = ΔV signé (directionnel : biais sous/sur-segmentation pour Q3)
+METRICS = ["cldice", "hd95", "nsd", "nsd05", "betti0", "volume_delta"]
 KEY = ["model", "trainer", "dataset", "fold", "scenario", "case", "eval_kind"]
 PROVENANCE = ["epochs", "checkpoint_mtime", "git_commit", "nnunet_version", "eval_ts"]
 SCHEMA = KEY + METRICS + PROVENANCE

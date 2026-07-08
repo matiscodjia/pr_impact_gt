@@ -217,6 +217,7 @@ def evaluate_pair_cached(pf: "PredFeatures", gt: np.ndarray, tolerance: float = 
         "cldice": _cldice_cached(pf, gt_bool),
         "hd95": _hd95_cached(pf, gt_bool),
         "nsd": _nsd_cached(pf, gt_bool, tolerance),
+        "nsd05": _nsd_cached(pf, gt_bool, 0.5),   # sous-voxel : sensible au drift de bord
         "betti0": _betti0_cached(pf, gt_bool),
         "volume_delta": (float(pf.bool.sum()) - n_gt) / n_gt if n_gt else 0.0,
     }
@@ -240,6 +241,7 @@ def _evaluate_one(pred_path: str, gt_dir: str, model_name: str, scenario_name: s
     cldice = compute_cldice(pred_data, gt_data)
     hd95 = compute_hd95(pred_data, gt_data, spacing=spacing)
     nsd = compute_nsd(pred_data, gt_data, spacing=spacing)
+    nsd05 = compute_nsd(pred_data, gt_data, spacing=spacing, tolerance=0.5)
     betti0 = compute_betti0(pred_data, gt_data)
 
     return {
@@ -249,6 +251,7 @@ def _evaluate_one(pred_path: str, gt_dir: str, model_name: str, scenario_name: s
         "cldice": cldice,
         "hd95": hd95,
         "nsd": nsd,
+        "nsd05": nsd05,
         "betti0": betti0,
         "volume_delta": compute_volume_delta(pred_data, gt_data),
     }

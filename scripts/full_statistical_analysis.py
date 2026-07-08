@@ -23,8 +23,10 @@ from scipy.stats import wilcoxon
 METRICS = {
     "cldice": "CLDice (↑)",
     "hd95":   "HD95 mm (↓)",
-    "nsd":    "NSD (↑)",
+    "nsd":    "NSD@2mm (↑)",
+    "nsd05":  "NSD@0.5mm (↑)",
     "betti0": "Betti0 (↓)",
+    "volume_delta": "ΔV signé",
 }
 
 
