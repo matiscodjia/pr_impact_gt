@@ -1,0 +1,81 @@
+
+############################
+INFO: You are using the old nnU-Net default plans. We have updated our recommendations. Please consider using those instead! Read more here: https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/resenc_presets.md
+############################
+
+Traceback (most recent call last):
+  File "/home/mcodjia/pr_impact_gt/.venv/bin/nnUNetv2_train", line 10, in <module>
+    sys.exit(run_training_entry())
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 259, in run_training_entry
+    run_training(args.dataset_name_or_id, args.configuration, args.fold, args.tr, args.p, args.pretrained_weights,
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 185, in run_training
+    nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, fold, trainer_class_name,
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 53, in get_trainer_from_args
+    preprocessed_dataset_folder_base = join(nnUNet_preprocessed, maybe_convert_to_dataset_name(dataset_name_or_id))
+                                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/utilities/dataset_name_id_conversion.py", line 75, in maybe_convert_to_dataset_name
+    return convert_id_to_dataset_name(dataset_name_or_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/utilities/dataset_name_id_conversion.py", line 49, in convert_id_to_dataset_name
+    raise RuntimeError(f"Could not find a dataset with the ID {dataset_id}. Make sure the requested dataset ID "
+RuntimeError: Could not find a dataset with the ID 104. Make sure the requested dataset ID exists and that nnU-Net knows where raw and preprocessed data are located (see Documentation - Installation). Here are your currently defined folders:
+nnUNet_preprocessed=/home/mcodjia/pr_impact_gt/nnUNet_data/nnUNet_preprocessed
+nnUNet_results=/home/mcodjia/pr_impact_gt/nnUNet_data/nnUNet_results
+nnUNet_raw=/home/mcodjia/pr_impact_gt/nnUNet_data/nnUNet_raw
+If something is not right, adapt your environment variables.
+
+############################
+INFO: You are using the old nnU-Net default plans. We have updated our recommendations. Please consider using those instead! Read more here: https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/resenc_presets.md
+############################
+
+Traceback (most recent call last):
+  File "/home/mcodjia/pr_impact_gt/.venv/bin/nnUNetv2_train", line 10, in <module>
+    sys.exit(run_training_entry())
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 259, in run_training_entry
+    run_training(args.dataset_name_or_id, args.configuration, args.fold, args.tr, args.p, args.pretrained_weights,
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 185, in run_training
+    nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, fold, trainer_class_name,
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 53, in get_trainer_from_args
+    preprocessed_dataset_folder_base = join(nnUNet_preprocessed, maybe_convert_to_dataset_name(dataset_name_or_id))
+                                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/utilities/dataset_name_id_conversion.py", line 75, in maybe_convert_to_dataset_name
+    return convert_id_to_dataset_name(dataset_name_or_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/utilities/dataset_name_id_conversion.py", line 49, in convert_id_to_dataset_name
+    raise RuntimeError(f"Could not find a dataset with the ID {dataset_id}. Make sure the requested dataset ID "
+RuntimeError: Could not find a dataset with the ID 104. Make sure the requested dataset ID exists and that nnU-Net knows where raw and preprocessed data are located (see Documentation - Installation). Here are your currently defined folders:
+nnUNet_preprocessed=/home/mcodjia/pr_impact_gt/nnUNet_data/nnUNet_preprocessed
+nnUNet_results=/home/mcodjia/pr_impact_gt/nnUNet_data/nnUNet_results
+nnUNet_raw=/home/mcodjia/pr_impact_gt/nnUNet_data/nnUNet_raw
+If something is not right, adapt your environment variables.
+
+############################
+INFO: You are using the old nnU-Net default plans. We have updated our recommendations. Please consider using those instead! Read more here: https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/resenc_presets.md
+############################
+
+Traceback (most recent call last):
+  File "/home/mcodjia/pr_impact_gt/.venv/bin/nnUNetv2_train", line 10, in <module>
+    sys.exit(run_training_entry())
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 259, in run_training_entry
+    run_training(args.dataset_name_or_id, args.configuration, args.fold, args.tr, args.p, args.pretrained_weights,
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 185, in run_training
+    nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, fold, trainer_class_name,
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 53, in get_trainer_from_args
+    preprocessed_dataset_folder_base = join(nnUNet_preprocessed, maybe_convert_to_dataset_name(dataset_name_or_id))
+                                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/utilities/dataset_name_id_conversion.py", line 75, in maybe_convert_to_dataset_name
+    return convert_id_to_dataset_name(dataset_name_or_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/utilities/dataset_name_id_conversion.py", line 49, in convert_id_to_dataset_name
+    raise RuntimeError(f"Could not find a dataset with the ID {dataset_id}. Make sure the requested dataset ID "
+RuntimeError: Could not find a dataset with the ID 104. Make sure the requested dataset ID exists and that nnU-Net knows where raw and preprocessed data are located (see Documentation - Installation). Here are your currently defined folders:
+nnUNet_preprocessed=/home/mcodjia/pr_impact_gt/nnUNet_data/nnUNet_preprocessed
+nnUNet_results=/home/mcodjia/pr_impact_gt/nnUNet_data/nnUNet_results
+nnUNet_raw=/home/mcodjia/pr_impact_gt/nnUNet_data/nnUNet_raw
+If something is not right, adapt your environment variables.

@@ -1,0 +1,63 @@
+
+############################
+INFO: You are using the old nnU-Net default plans. We have updated our recommendations. Please consider using those instead! Read more here: https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/resenc_presets.md
+############################
+
+Traceback (most recent call last):
+  File "/home/mcodjia/pr_impact_gt/.venv/bin/nnUNetv2_train", line 10, in <module>
+    sys.exit(run_training_entry())
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 259, in run_training_entry
+    run_training(args.dataset_name_or_id, args.configuration, args.fold, args.tr, args.p, args.pretrained_weights,
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 185, in run_training
+    nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, fold, trainer_class_name,
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 55, in get_trainer_from_args
+    plans = load_json(plans_file)
+            ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mcodjia/pr_impact_gt/.venv/lib/python3.11/site-packages/batchgenerators/utilities/file_and_folder_operations.py", line 103, in load_json
+    with open(file, 'r') as f:
+         ^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/mcodjia/pr_impact_gt/nnUNet_data/nnUNet_preprocessed/Dataset103_PARSE_DriftMuMinus/nnUNetPlans.json'
+
+############################
+INFO: You are using the old nnU-Net default plans. We have updated our recommendations. Please consider using those instead! Read more here: https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/resenc_presets.md
+############################
+
+Traceback (most recent call last):
+  File "/home/mcodjia/pr_impact_gt/.venv/bin/nnUNetv2_train", line 10, in <module>
+    sys.exit(run_training_entry())
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 259, in run_training_entry
+    run_training(args.dataset_name_or_id, args.configuration, args.fold, args.tr, args.p, args.pretrained_weights,
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 185, in run_training
+    nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, fold, trainer_class_name,
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 55, in get_trainer_from_args
+    plans = load_json(plans_file)
+            ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mcodjia/pr_impact_gt/.venv/lib/python3.11/site-packages/batchgenerators/utilities/file_and_folder_operations.py", line 103, in load_json
+    with open(file, 'r') as f:
+         ^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/mcodjia/pr_impact_gt/nnUNet_data/nnUNet_preprocessed/Dataset103_PARSE_DriftMuMinus/nnUNetPlans.json'
+
+############################
+INFO: You are using the old nnU-Net default plans. We have updated our recommendations. Please consider using those instead! Read more here: https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/resenc_presets.md
+############################
+
+Traceback (most recent call last):
+  File "/home/mcodjia/pr_impact_gt/.venv/bin/nnUNetv2_train", line 10, in <module>
+    sys.exit(run_training_entry())
+             ^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 259, in run_training_entry
+    run_training(args.dataset_name_or_id, args.configuration, args.fold, args.tr, args.p, args.pretrained_weights,
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 185, in run_training
+    nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, fold, trainer_class_name,
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/nnUNet_install/nnunetv2/run/run_training.py", line 55, in get_trainer_from_args
+    plans = load_json(plans_file)
+            ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mcodjia/pr_impact_gt/.venv/lib/python3.11/site-packages/batchgenerators/utilities/file_and_folder_operations.py", line 103, in load_json
+    with open(file, 'r') as f:
+         ^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/mcodjia/pr_impact_gt/nnUNet_data/nnUNet_preprocessed/Dataset103_PARSE_DriftMuMinus/nnUNetPlans.json'
