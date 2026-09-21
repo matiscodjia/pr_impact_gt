@@ -243,6 +243,61 @@ class nnUNetTrainerDriftMu0(nnUNetTrainerDegraded):
 
 
 # ============================================================================
+# Réplicats de graine (variance d'entraînement)
+# ============================================================================
+# nnU-Net nomme le dossier de sortie d'après le trainer : deux entraînements du MÊME
+# trainer s'écraseraient. Un réplicat = une sous-classe distincte (dossier distinct),
+# même dataset, mêmes plis (splits_final.json), graine différente.
+#
+# La graine fixe l'initialisation des poids et le RNG du processus principal. Ce n'est
+# PAS une reproductibilité bit-à-bit (cuDNN, workers d'augmentation non déterministes) :
+# c'est un réplicat indépendant documenté, ce qu'exige une estimation de variance.
+
+def _set_seed(seed: int) -> None:
+    import random
+    random.seed(seed)
+    np.random.seed(seed % (2**32))
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+class _SeedMixin:
+    """À placer AVANT la classe de base : ``class X_s1(_SeedMixin, nnUNetTrainerStd)``."""
+    _SEED = 0
+
+    def initialize(self):
+        # graine dépendant du pli : les 5 plis d'un réplicat diffèrent, l'ensemble reste fixé
+        _set_seed(self._SEED * 1000 + int(self.fold))
+        self.print_to_log_file(f"[seed] replicate seed={self._SEED}, effective={self._SEED * 1000 + int(self.fold)}")
+        super().initialize()
+
+
+class nnUNetTrainerStd_s1(_SeedMixin, nnUNetTrainerStd):
+    _SEED = 1
+
+
+class nnUNetTrainerStd_s2(_SeedMixin, nnUNetTrainerStd):
+    _SEED = 2
+
+
+class nnUNetTrainerDegradedOmissionOnly_s1(_SeedMixin, nnUNetTrainerDegradedOmissionOnly):
+    _SEED = 1
+
+
+class nnUNetTrainerDegradedOmissionOnly_s2(_SeedMixin, nnUNetTrainerDegradedOmissionOnly):
+    _SEED = 2
+
+
+class nnUNetTrainerDriftMu0_s1(_SeedMixin, nnUNetTrainerDriftMu0):
+    _SEED = 1
+
+
+class nnUNetTrainerDriftMu0_s2(_SeedMixin, nnUNetTrainerDriftMu0):
+    _SEED = 2
+
+
+# ============================================================================
 # Calibration du schedule
 # ============================================================================
 # Objectif : situer le plateau des métriques de TOPOLOGIE (clDice/Betti0).
