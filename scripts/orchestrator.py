@@ -262,7 +262,7 @@ def run_streamed(cmd, log_path, total_epochs, label, show_progress) -> int:
 
 
 def train_unit(dataset, trainer, fold, cfg, device, fold_dir, max_attempts, backoff,
-               total_epochs, label, log_path, show_progress):
+               total_epochs, label, log_path, show_progress, save_npz=True):
     """Entraîne une unité, reprise auto, retry/back-off. Retourne l'état final."""
     rc = -1
     for attempt in range(1, max_attempts + 1):
@@ -270,8 +270,12 @@ def train_unit(dataset, trainer, fold, cfg, device, fold_dir, max_attempts, back
         if state == "done":
             return "done", 0, None
         resume = state == "resumable"
-        cmd = ["nnUNetv2_train", str(dataset), cfg, str(fold),
-               "-tr", trainer, "--npz", "-device", device]
+        # --npz écrit les probabilités softmax de validation (~2/3 du poids d'un pli) ; nos
+        # analyses n'utilisent que les .nii.gz (argmax) : --no-npz ne change pas ces derniers.
+        cmd = ["nnUNetv2_train", str(dataset), cfg, str(fold), "-tr", trainer]
+        if save_npz:
+            cmd.append("--npz")
+        cmd += ["-device", device]
         if resume:
             cmd.append("--c")
         tag = "reprise --c" if resume else "neuf"
@@ -337,6 +341,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="liste la file sans entraîner")
     parser.add_argument("--calibrate", action="store_true",
                         help="run de calibration (1 fold long + snapshots) puis calibrate.py")
+    parser.add_argument("--no-npz", action="store_true",
+                        help="n'écrit pas les probabilités softmax de validation (gain de place/temps)")
     parser.add_argument("--no-progress", action="store_true",
                         help="désactive la barre de progression (logs bruts)")
     args = parser.parse_args()
@@ -439,7 +445,8 @@ def main():
         state, rc, err = train_unit(
             m["dataset_id"], m["trainer"], fold, cfg, device, fd,
             args.max_attempts, args.backoff,
-            total, f"[{i}/{len(queue)}] {m['name']} f{fold}", log_path, show_progress)
+            total, f"[{i}/{len(queue)}] {m['name']} f{fold}", log_path, show_progress,
+            save_npz=not args.no_npz)
 
         u["attempts"] = u.get("attempts", 0) + 1
         u["state"] = state

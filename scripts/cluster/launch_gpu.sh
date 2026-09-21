@@ -93,6 +93,9 @@ for m in "${MODELS[@]}"; do
   gpu="${GPU_LIST[$((i % ${#GPU_LIST[@]}))]}"; i=$((i+1))
   cmd=( "$PY" scripts/orchestrator.py --config "$CFG" --results_dir "$OUT/$m" --tiers "$TIERS"
         --models "$m" --no-progress )
+  # réplicats : pas de .npz (softmax) -- ~2/3 du poids d'un pli, inutile pour nos analyses.
+  # KEEP_NPZ=1 pour les garder ; le mode --study (M0-M4) reste inchangé.
+  [[ "$STUDY" == 0 && "${KEEP_NPZ:-0}" != 1 ]] && cmd+=( --no-npz )
   [[ ${#FOLDS[@]} -gt 0 ]] && cmd+=( --folds "${FOLDS[@]}" )
   [[ "$DEBUG" == 1 ]] && cmd+=( --debug )
   echo "[$m] GPU $gpu : ${cmd[*]}"
