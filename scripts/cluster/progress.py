@@ -32,39 +32,51 @@ QUEUE = re.compile(r"\[(\d+)/(\d+)\] ▶ (\S+)")
 VAL_S_PER_CASE = 70.0   # repère mesuré sur les plis M0-M2 d'origine (~17 cas en ~20 min)
 
 
-def parse_fold(fold_dir, default_budget):
+def parse_log(log, default_budget):
     st = {"budget": default_budget, "n_val": None, "epoch": -1, "times": [], "dice": None,
           "ema": None, "predicted": 0, "val_done": False, "last": None, "val_start": None,
-          "cur_done": False, "log_last": []}
+          "cur_done": False}
+    with open(log, errors="ignore") as f:
+        for line in f:
+            m = TS.match(line.rstrip())
+            if not m:
+                continue
+            t, msg = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S"), m.group(2).strip()
+            st["last"] = t
+            if (g := EPOCH.match(msg)):
+                st["epoch"], st["predicted"], st["val_start"] = int(g.group(1)), 0, None
+                st["cur_done"] = False
+            elif (g := EP_TIME.match(msg)):
+                st["times"].append(float(g.group(1)))
+                st["cur_done"] = True
+            elif (g := DICE.match(msg)):
+                st["dice"] = ",".join(re.findall(r"\d\.\d+", g.group(1))) or None
+            elif (g := EMA.search(msg)):
+                st["ema"] = float(g.group(1))
+            elif (g := BUDGET.search(msg)):
+                st["budget"] = int(g.group(1))
+            elif (g := NVAL.search(msg)):
+                st["n_val"] = int(g.group(1))
+            elif msg.startswith("predicting "):
+                st["predicted"] += 1
+                st["val_start"] = st["val_start"] or t
+            elif msg.startswith("Validation complete"):
+                st["val_done"] = True
+    return st
+
+
+def parse_fold(fold_dir, default_budget):
+    """Un log par lancement de nnU-Net (reprise --c, --debug, ou processus en double).
+
+    Le pli est terminé si UN log a atteint le budget et validé -- un --debug validé à
+    2 époques ne compte pas, et un doublon tué en cours de route ne l'annule pas.
+    Sinon on montre le log le plus récent (numéros d'époque absolus, donc justes après --c).
+    """
     logs = sorted(glob.glob(os.path.join(fold_dir, "training_log_*.txt")), key=os.path.getmtime)
-    for log in logs:
-        st["log_last"].append(None)
-        with open(log, errors="ignore") as f:
-            for line in f:
-                m = TS.match(line.rstrip())
-                if not m:
-                    continue
-                t, msg = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S"), m.group(2).strip()
-                st["last"] = st["log_last"][-1] = t
-                if (g := EPOCH.match(msg)):
-                    st["epoch"], st["predicted"], st["val_start"] = int(g.group(1)), 0, None
-                    st["cur_done"] = st["val_done"] = False   # reprise après un --debug validé
-                elif (g := EP_TIME.match(msg)):
-                    st["times"].append(float(g.group(1)))
-                    st["cur_done"] = True
-                elif (g := DICE.match(msg)):
-                    st["dice"] = ",".join(re.findall(r"\d\.\d+", g.group(1))) or None
-                elif (g := EMA.search(msg)):
-                    st["ema"] = float(g.group(1))
-                elif (g := BUDGET.search(msg)):
-                    st["budget"] = int(g.group(1))
-                elif (g := NVAL.search(msg)):
-                    st["n_val"] = int(g.group(1))
-                elif msg.startswith("predicting "):
-                    st["predicted"] += 1
-                    st["val_start"] = st["val_start"] or t
-                elif msg.startswith("Validation complete"):
-                    st["val_done"] = True
+    states = [parse_log(log, default_budget) for log in logs] or [parse_log(os.devnull, default_budget)]
+    finished = [s for s in states if s["val_done"] and completed(s) >= default_budget]
+    st = dict(finished[-1] if finished else states[-1])
+    st["log_last"] = [s["last"] for s in states]
     return st
 
 
