@@ -17,8 +17,14 @@ bash scripts/cluster/launch_gpu.sh --status
 # (b) lancement réel : commencer par les plis 0 et 1 (34 cas), on étendra ensuite
 bash scripts/cluster/launch_gpu.sh --tiers S --folds 0 1
 bash scripts/cluster/launch_gpu.sh --status            # GPU, dernière ligne de log, en cours ?
+python scripts/cluster/progress.py                     # précis : époque, s/époque, dice, fin estimée par pli et par file
 bash scripts/cluster/launch_gpu.sh --stop              # arrête tous les processus
 ```
+
+`progress.py` lit les `training_log_*.txt` de nnU-Net (reprises `--c` comprises) et signale
+`BLOQUÉ?` quand un log n'avance plus. `watch -n 60 python scripts/cluster/progress.py` pour
+un suivi continu ; M3/M4 : `--datasets 'Dataset10[34]_*' --pattern nnUNetTrainerStd`.
+La colonne « actif » teste le PID : elle n'est juste que sur le nœud qui fait tourner le processus.
 
 - **3 processus en parallèle** (un par régime) sur l'A40 ; chacun a son ledger et son
   `results_seeds/<modèle>/`. Reprenable : relancer la même commande reprend au dernier
