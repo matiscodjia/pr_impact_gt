@@ -42,9 +42,17 @@ OUT="results_seeds"; mkdir -p "$OUT/logs"
 PY="${PYTHON:-python}"
 
 # ---- stop / status -----------------------------------------------------------
+running_orchestrators() {   # PID de tout orchestrateur écrivant sous $OUT/ (= son groupe, via setsid)
+  pgrep -f -- "orchestrator.py .*--results_dir $OUT/${1:-}" || true
+}
 if [[ "$ACTION" == "stop" ]]; then
-  for f in "$OUT"/logs/*.pid; do [[ -f "$f" ]] || continue
-    pid=$(cat "$f"); kill -- "-$pid" 2>/dev/null && echo "arrêté $(basename "$f" .pid)" || true; rm -f "$f"; done
+  # .pid ET recherche par ligne de commande : un double lancement écrase les .pid, et les
+  # orchestrateurs du premier lancement survivraient à un --stop fondé sur les seuls .pid.
+  pids=$( { cat "$OUT"/logs/*.pid 2>/dev/null || true; running_orchestrators; } | sort -u )
+  for pid in $pids; do
+    { kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null; } && echo "arrêté $pid" || true
+  done
+  rm -f "$OUT"/logs/*.pid
   exit 0
 fi
 if [[ "$ACTION" == "status" ]]; then
@@ -88,8 +96,14 @@ MODELS=(); while IFS= read -r line; do MODELS+=("$line"); done < <($PY scripts/c
 [[ ${#MODELS[@]} -gt 0 ]] || { echo "aucun modèle pour les tiers '$TIERS' dans $CFG"; exit 1; }
 IFS=' ' read -r -a GPU_LIST <<< "${GPUS:-0}"
 
-i=0
+i=0; launched=0
 for m in "${MODELS[@]}"; do
+  # Garde-fou : relancer pendant que ça tourne entraînerait chaque pli DEUX fois dans le même
+  # dossier (checkpoints et validation/ écrasés, GPU partagé en deux). Arrivé le 22/09.
+  if [[ -n "$(running_orchestrators "$m( |$)")" ]]; then
+    echo "[$m] déjà en cours (pid $(running_orchestrators "$m( |$)" | tr '\n' ' ')) -- non relancé"
+    continue
+  fi
   gpu="${GPU_LIST[$((i % ${#GPU_LIST[@]}))]}"; i=$((i+1))
   cmd=( "$PY" scripts/orchestrator.py --config "$CFG" --results_dir "$OUT/$m" --tiers "$TIERS"
         --models "$m" --no-progress )
@@ -104,7 +118,7 @@ for m in "${MODELS[@]}"; do
   # setsid : nouveau groupe de processus => survit au logout ssh ; --stop tue tout le groupe.
   # PYTHONUNBUFFERED : sinon le log du modèle (un fichier) reste vide des heures (tampon Python).
   CUDA_VISIBLE_DEVICES="$gpu" PYTHONUNBUFFERED=1 setsid nohup "${cmd[@]}" >> "$OUT/logs/$m.log" 2>&1 < /dev/null &
-  echo $! > "$OUT/logs/$m.pid"
+  echo $! > "$OUT/logs/$m.pid"; launched=$((launched+1))
 done
 [[ "$DRY" == 1 ]] && { echo; echo "dry-run : rien lancé."; exit 0; }
-echo; echo "lancé ${#MODELS[@]} processus. Suivi : bash scripts/cluster/launch_gpu.sh --status"
+echo; echo "lancé $launched processus. Suivi : bash scripts/cluster/launch_gpu.sh --status"
