@@ -1,0 +1,13 @@
+postprocessing,model,scenario,cldice_mean,n
+none,M0_Star,GT_star,0.8770042075557408,85
+none,M0_Star,GT_minus_omission,0.7770691279464542,85
+none,M1_Omission,GT_star,0.8587962921720018,85
+none,M1_Omission,GT_minus_omission,0.7733197306124755,85
+none,M2_Drift_mu0,GT_star,0.8578335697195304,85
+none,M2_Drift_mu0,GT_minus_omission,0.7720778820302208,85
+lcc,M0_Star,GT_star,0.8764690385298363,85
+lcc,M0_Star,GT_minus_omission,0.7781213210132323,85
+lcc,M1_Omission,GT_star,0.8507599986540832,85
+lcc,M1_Omission,GT_minus_omission,0.7690147637682447,85
+lcc,M2_Drift_mu0,GT_star,0.8501415681048241,85
+lcc,M2_Drift_mu0,GT_minus_omission,0.7677164784511034,85

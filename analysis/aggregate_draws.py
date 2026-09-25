@@ -38,7 +38,7 @@ def main():
                      "interaction_min": g.interaction_mean.min(), "interaction_max": g.interaction_mean.max(),
                      "delta_ref_mean": g.delta_ref.mean(), "delta_ref_sd": g.delta_ref.std(ddof=1),
                      "n_draws_sign_flip": int(g.sign_flip.sum()),
-                     "d_min": g.d.min(), "d_max": g.d.max()})
+                     "d_min": g.d.min(), "d_max": g.d.max(), "p_raw_max": g.p_raw.max()})
     out = pd.DataFrame(rows)
     out.to_csv("results/reference_draws_summary.csv", index=False)
     pd.set_option("display.width", 220)
