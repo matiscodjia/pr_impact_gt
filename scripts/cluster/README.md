@@ -58,6 +58,44 @@ tail -f results/logs/draws.log
 Reprenable (un tirage terminé est sauté). Le nombre de workers est borné par la RAM
 (~2 Go/worker) : un pool trop large **se bloque sans message** si un worker est tué.
 
+## 3. Q3 -- un réseau apprend-il un biais d'annotation ? (M3/M4, GPU)
+
+M3 est entraîné sur GT⁻ drift μ=−0,5 figée (Dataset103), M4 sur μ=+0,5 (Dataset104). Leurs
+labels d'entraînement sont **exactement** les références d'évaluation drift−/drift+ (vérifié
+à 85/85 sur le Mac). Plan d'analyse fixé avant les données : docstring de
+`analysis/q3_learned_bias.py` (contraste principal M4 contre M3 ; M3 contre M0 serait biaisé,
+car M2 montre qu'entraîner sur des bords bruités fait déjà perdre 5,4 % de volume).
+
+**(0) Une fois, depuis le Mac** : copier les références GT⁻ de l'étude sur le cluster. Elles
+servent aux labels de M3/M4 et au score contre GT⁻ (sans elles `collect_metrics` ne score que
+GT* : c'est ce qui est arrivé au pli 0 des réplicats ; il sera complété au prochain pli).
+```bash
+rsync -av nnUNet_data/nnUNet_raw/Dataset100_PARSE/labelsTr_GT_minus_{omission,drift_neg,drift_pos} \
+      gpu2:pr_impact_gt/nnUNet_data/nnUNet_raw/Dataset100_PARSE/
+```
+**(1) Sur le nœud qui entraînera M3/M4** (autre worker : vérifier d'abord qu'il voit le même
+`~/pr_impact_gt`, sinon rien de ce qui suit ne marche tel quel) :
+```bash
+git pull
+bash scripts/cluster/prepare_q3.sh --check      # état, ne modifie rien
+bash scripts/cluster/prepare_q3.sh              # ~1 h de CPU : liens images, labels = GT⁻ (vérifiés
+                                                # voxel à voxel), plans ET normalisation de Dataset100,
+                                                # plis de M0, prétraitement 3d_fullres ; relançable
+GPUS=0 bash scripts/cluster/launch_gpu.sh --q3 --folds 0 1
+watch -n 60 python3 scripts/cluster/progress.py  # réplicats + Q3 dans le même tableau
+```
+- **Un seul lancement.** Le lanceur refuse désormais de relancer un modèle dont
+  l'orchestrateur tourne (un double lancement avait fait entraîner chaque pli deux fois).
+- **Durée** : entraîneur standard, 68 s/époque seul sur l'A40 (≈ 10 h/pli). M3 et M4 en
+  parallèle sur un GPU : environ deux fois plus lent chacun, donc ≈ 1,5-2 jours pour les plis
+  0 et 1. Étendre ensuite avec `--folds 2 3 4`.
+- **Arrêter Q3 seulement** : `bash scripts/cluster/launch_gpu.sh --stop` *sur ce nœud*. Les
+  `.pid` portent le nom du nœud (`pid@nœud`) : un `--stop` n'agit que sur les processus de la
+  machine où il est lancé, et ne tue qu'un vrai orchestrateur.
+- **Résultats** : `results_seeds/M3_Drift_muMinus/metrics.csv` et `M4_...` (collecte
+  automatique après chaque pli, 4 références). Les pousser, puis en local :
+  `python analysis/q3_learned_bias.py` (`--selftest` vérifie l'analyse sur données synthétiques).
+
 ## Ce qui n'a PAS été testé ici
 
 Ce Mac n'a ni CUDA ni `nnunetv2` : les classes `*_s1/_s2` (`custom_trainers/`) ont été
@@ -66,3 +104,9 @@ réplicat. Le test `--debug` de l'étape (a) sert précisément à cela. Testés
 génération de la config, listes de modèles, simulation (`--dry-run`) des lanceurs,
 `orchestrator.py --dry-run` sur la config générée, `seed_variance.py` (réplicats
 synthétiques), `dose_response.py` avec une autre graine.
+Q3 (2026-09-25) : `prepare_q3.sh --check/--dry-run` sur une copie isolée (labels = GT⁻ 85/85,
+comparaison des plans dans les deux sens), `launch_gpu.sh --q3 --dry-run`, `--stop`/`--status`
+avec faux orchestrateurs (local, autre nœud, leurre, ancien `.pid`), `progress.py` sur logs
+simulés, `q3_learned_bias.py --selftest` + test nul. **Jamais exécutés ici** : les commandes
+nnU-Net de `prepare_q3.sh` (extract_fingerprint, move_plans, preprocess ; options vérifiées
+dans les sources de nnunetv2 2.8.1, pas sur la version du cluster) et `setsid`.

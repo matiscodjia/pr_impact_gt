@@ -8,7 +8,9 @@
 #     bash scripts/cluster/launch_gpu.sh --tiers S               # graine 1, 3 régimes, 5 plis
 #     bash scripts/cluster/launch_gpu.sh --tiers S --folds 0 1   # seulement les plis 0 et 1
 #     bash scripts/cluster/launch_gpu.sh --tiers T               # graine 2
-#     bash scripts/cluster/launch_gpu.sh --tiers B --study       # M3/M4 (config de l'étude)
+#     bash scripts/cluster/launch_gpu.sh --q3 --folds 0 1        # Q3 : M3/M4 (après prepare_q3.sh)
+#     bash scripts/cluster/launch_gpu.sh --tiers B --study       # M3/M4 avec la config complète (déconseillé :
+#                                                                 #  re-score M0-M2 à chaque pli)
 #     bash scripts/cluster/launch_gpu.sh --status | --stop
 #
 # Un processus par modèle, chacun avec SON dossier de résultats (ledger.json et metrics.csv
@@ -23,13 +25,14 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 ROOT="$(pwd)"
 
-TIERS="S"; FOLDS=(); DEBUG=0; STUDY=0; ACTION="launch"; DRY=0
+TIERS="S"; FOLDS=(); DEBUG=0; STUDY=0; Q3=0; ACTION="launch"; DRY=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --tiers)  TIERS="$2"; shift 2 ;;
     --folds)  shift; FOLDS=(); while [[ $# -gt 0 && "$1" != --* ]]; do FOLDS+=("$1"); shift; done ;;
     --debug)  DEBUG=1; shift ;;
     --study)  STUDY=1; shift ;;      # utilise experiment_config.yaml (M0-M4) au lieu des réplicats
+    --q3)     Q3=1; TIERS="B"; shift ;;   # M3/M4 seuls (configs/generated_q3_config.yaml)
     --status) ACTION="status"; shift ;;
     --stop)   ACTION="stop"; shift ;;
     --dry-run) DRY=1; shift ;;
@@ -42,24 +45,43 @@ OUT="results_seeds"; mkdir -p "$OUT/logs"
 PY="${PYTHON:-python}"
 
 # ---- stop / status -----------------------------------------------------------
-running_orchestrators() {   # PID de tout orchestrateur écrivant sous $OUT/ (= son groupe, via setsid)
-  pgrep -f -- "orchestrator.py .*--results_dir $OUT/${1:-}" || true
+# Un orchestrateur = un python qui EXÉCUTE scripts/orchestrator.py (motif ancré : un shell dont
+# la commande mentionne simplement ce nom, ou un grep, ne doit jamais être pris pour lui).
+ORCH_RE='^[^ ]*python[0-9.]* +([^ ]*/)?scripts/orchestrator\.py '
+running_orchestrators() {   # PID de tout orchestrateur LOCAL écrivant sous $OUT/ (= son groupe, via setsid)
+  pgrep -f -- "${ORCH_RE}.*--results_dir $OUT/${1:-}" || true
 }
+HOST="$(hostname)"
+# Fichier .pid = "pid@nœud" : avec un /home partagé entre workers, results_seeds/logs/ est
+# commun, et un PID n'a de sens que sur le nœud qui l'a créé (ancien format "pid" = ce nœud).
+pid_of()  { cut -d@ -f1 < "$1"; }
+host_of() { local h; h=$(cut -s -d@ -f2 < "$1"); echo "${h:-$HOST}"; }
+is_orch() { ps -o args= -p "$1" 2>/dev/null | grep -Eq "$ORCH_RE"; }   # PID réutilisé ? ancien .pid ?
 if [[ "$ACTION" == "stop" ]]; then
-  # .pid ET recherche par ligne de commande : un double lancement écrase les .pid, et les
-  # orchestrateurs du premier lancement survivraient à un --stop fondé sur les seuls .pid.
-  pids=$( { cat "$OUT"/logs/*.pid 2>/dev/null || true; running_orchestrators; } | sort -u )
-  for pid in $pids; do
+  # .pid (de CE nœud) ET recherche par ligne de commande : un double lancement écrase les .pid,
+  # et les orchestrateurs du premier lancement survivraient à un --stop fondé sur les seuls .pid.
+  pids=$(running_orchestrators)
+  for f in "$OUT"/logs/*.pid; do
+    [[ -f "$f" ]] || continue
+    if [[ "$(host_of "$f")" != "$HOST" ]]; then
+      echo "$(basename "$f" .pid) tourne sur $(host_of "$f") : --stop à lancer là-bas"; continue
+    fi
+    pids="$pids $(pid_of "$f")"; rm -f "$f"
+  done
+  for pid in $(echo $pids | tr ' ' '\n' | sort -u); do
+    is_orch "$pid" || { echo "$pid n'est pas un orchestrateur sur $HOST : ignoré"; continue; }
     { kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null; } && echo "arrêté $pid" || true
   done
-  rm -f "$OUT"/logs/*.pid
   exit 0
 fi
 if [[ "$ACTION" == "status" ]]; then
   command -v nvidia-smi >/dev/null && nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu --format=csv
   for f in "$OUT"/logs/*.log; do [[ -f "$f" ]] || continue
     echo "== $(basename "$f" .log)"; tail -n 2 "$f" | cut -c1-160
-    pf="${f%.log}.pid"; [[ -f "$pf" ]] && (kill -0 "$(cat "$pf")" 2>/dev/null && echo "   [en cours]" || echo "   [terminé/arrêté]"); done
+    pf="${f%.log}.pid"; [[ -f "$pf" ]] || continue
+    if [[ "$(host_of "$pf")" != "$HOST" ]]; then echo "   [sur $(host_of "$pf")]"
+    else is_orch "$(pid_of "$pf")" && echo "   [en cours]" || echo "   [terminé/arrêté]"; fi
+  done
   exit 0
 fi
 
@@ -77,7 +99,15 @@ if [[ "$DRY" == 0 ]]; then
   $PY -c "from nnunetv2.training.nnUNetTrainer.nnUNetTrainerDegraded import nnUNetTrainerStd_s1, nnUNetTrainerDriftMu0_s2; print('import des réplicats: OK')"
 fi
 
-if [[ "$STUDY" == 1 ]]; then CFG="configs/experiment_config.yaml"
+if [[ "$Q3" == 1 ]]; then
+  # Les plans/données de 103-104 doivent venir de prepare_q3.sh (plans de Dataset100, labels = GT⁻).
+  for n in Dataset103_PARSE_DriftMuMinus Dataset104_PARSE_DriftMuPlus; do
+    [[ -f "${nnUNet_preprocessed:-nnUNet_data/nnUNet_preprocessed}/$n/.q3_ready" ]] && continue
+    [[ "$DRY" == 1 ]] && { echo "(dry-run) $n pas encore préparé"; continue; }
+    echo "$n non préparé : lancer d'abord  bash scripts/cluster/prepare_q3.sh"; exit 1
+  done
+  $PY scripts/cluster/make_q3_config.py; CFG="configs/generated_q3_config.yaml"
+elif [[ "$STUDY" == 1 ]]; then CFG="configs/experiment_config.yaml"
 else $PY scripts/cluster/make_seed_config.py; CFG="configs/generated_seeds_config.yaml"; fi
 [[ "$DEBUG" == 1 ]] && export DEBUG_PIPELINE=1
 if [[ "$DEBUG" == 1 ]]; then
@@ -118,7 +148,7 @@ for m in "${MODELS[@]}"; do
   # setsid : nouveau groupe de processus => survit au logout ssh ; --stop tue tout le groupe.
   # PYTHONUNBUFFERED : sinon le log du modèle (un fichier) reste vide des heures (tampon Python).
   CUDA_VISIBLE_DEVICES="$gpu" PYTHONUNBUFFERED=1 setsid nohup "${cmd[@]}" >> "$OUT/logs/$m.log" 2>&1 < /dev/null &
-  echo $! > "$OUT/logs/$m.pid"; launched=$((launched+1))
+  echo "$!@$HOST" > "$OUT/logs/$m.pid"; launched=$((launched+1))
 done
 [[ "$DRY" == 1 ]] && { echo; echo "dry-run : rien lancé."; exit 0; }
 echo; echo "lancé $launched processus. Suivi : bash scripts/cluster/launch_gpu.sh --status"

@@ -7,16 +7,17 @@ atteinte / budget, s/époque (médiane des 20 dernières), pseudo-Dice, EMA, âg
 dernière ligne, fin estimée ; par modèle : fin estimée de toute sa file.
 
 À lancer SUR le worker, racine du repo :
-    python scripts/cluster/progress.py                  # réplicats *_s1 / *_s2
+    python scripts/cluster/progress.py                  # réplicats *_s1/_s2 + Q3 (M3/M4)
     python scripts/cluster/progress.py --pattern '*'    # tous les trainers
     watch -n 60 python scripts/cluster/progress.py      # rafraîchi chaque minute
-    python scripts/cluster/progress.py --datasets 'Dataset10[34]_*' --pattern nnUNetTrainerStd  # M3/M4
+    python scripts/cluster/progress.py --scan 'Dataset10[34]_*:nnUNetTrainerStd'   # Q3 seul
 """
 import argparse
 import glob
 import json
 import os
 import re
+import socket
 import statistics
 import subprocess
 from datetime import datetime, timedelta
@@ -29,6 +30,9 @@ EMA = re.compile(r"New best EMA pseudo Dice: ([\d.]+)")
 BUDGET = re.compile(r"(?:epochs\s*:|num_epochs set to)\s*(\d+)")
 NVAL = re.compile(r"This split has \d+ training and (\d+) validation cases")
 QUEUE = re.compile(r"\[(\d+)/(\d+)\] ▶ (\S+)")
+# Campagnes affichées par défaut : réplicats de graine (Dataset100, *_s1/_s2) et Q3 (M3/M4 =
+# nnUNetTrainerStd sur Dataset103/104). Les M0-M2 d'origine, terminés, ne sont pas listés.
+DEFAULT_SCANS = ["Dataset100_*:*_s[12]", "Dataset10[34]_*:nnUNetTrainerStd"]
 VAL_S_PER_CASE = 70.0   # repère mesuré sur les plis M0-M2 d'origine (~17 cas en ~20 min)
 
 
@@ -126,26 +130,35 @@ def queue_of(model_log):
 
 
 def alive(pid_file):
+    """'oui' / 'NON' / nom du nœud : le .pid vaut "pid@nœud" (ancien format "pid" = ce nœud)."""
     try:
-        os.kill(int(open(pid_file).read().strip()), 0)
-        return True
+        pid, _, host = open(pid_file).read().strip().partition("@")
+        if host and host != socket.gethostname():
+            return host.split(".")[0]          # autre worker : le PID n'a pas de sens ici
+        os.kill(int(pid), 0)
+        return "oui"
     except (OSError, ValueError):
-        return False
+        return "NON"
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--pattern", default="*_s[12]", help="glob sur le nom du trainer")
-    ap.add_argument("--datasets", default="Dataset100_*",
+    ap.add_argument("--scan", action="append", metavar="DATASETS:TRAINERS",
+                    help="couple de globs dataset:trainer, répétable (défaut : réplicats + Q3)")
+    ap.add_argument("--pattern", default=None, help="glob sur le nom du trainer (un seul couple)")
+    ap.add_argument("--datasets", default=None,
                     help="glob sur les datasets, ex. 'Dataset10[34]_*' pour M3/M4")
     ap.add_argument("--seeds-dir", default="results_seeds")
     ap.add_argument("--budget", type=int, default=500, help="époques si absent du log")
     args = ap.parse_args()
 
     res = os.environ.get("nnUNet_results", "nnUNet_data/nnUNet_results")
-    ds = sorted(glob.glob(os.path.join(res, args.datasets)))
-    if not ds:
-        raise SystemExit(f"{args.datasets} introuvable dans {res} (source .env_nnunet ?)")
+    if args.datasets or args.pattern:
+        scans = [(args.datasets or "Dataset100_*", args.pattern or "*_s[12]")]
+    else:
+        scans = [tuple(x.split(":", 1)) for x in (args.scan or DEFAULT_SCANS)]
+    if not glob.glob(os.path.join(res, "Dataset*")):
+        raise SystemExit(f"aucun dataset dans {res} (source .env_nnunet ?)")
     now = datetime.now()
     try:
         print(subprocess.run(["nvidia-smi", "--query-gpu=index,utilization.gpu,memory.used,memory.total",
@@ -158,11 +171,12 @@ def main():
     print(hdr + "\n" + "-" * len(hdr))
 
     rows, per_trainer = [], {}   # clé (dataset, trainer) : M3 et M4 ont le même trainer
-    tdirs = [t for d in ds for t in sorted(glob.glob(os.path.join(d, f"{args.pattern}__*")))]
+    tdirs = [t for dglob, tglob in scans for d in sorted(glob.glob(os.path.join(res, dglob)))
+             for t in sorted(glob.glob(os.path.join(d, f"{tglob}__*")))]
     for tdir in tdirs:
         trainer = os.path.basename(tdir).split("__")[0]
         dsid = int(re.search(r"Dataset(\d+)_", tdir).group(1))
-        label = trainer if len(ds) == 1 else f"d{dsid} {trainer}"
+        label = trainer if dsid == 100 else f"d{dsid} {trainer}"
         for fd in sorted(glob.glob(os.path.join(tdir, "fold_*"))):
             fold = int(fd.rsplit("_", 1)[1])
             st = parse_fold(fd, args.budget)
@@ -206,11 +220,11 @@ def main():
 
     # Par processus : le ledger (écrit à chaque début de pli) plutôt que le log de
     # l'orchestrateur, que Python ne vide pas tant qu'il écrit dans un fichier.
-    print(f"\n{'modèle (processus)':<24}{'actif':<7}{'plis faits':>11}  {'en cours':<22}fin estimée")
+    print(f"\n{'modèle (processus)':<24}{'actif':<14}{'plis faits':>11}  {'en cours':<22}fin estimée")
     for log in sorted(glob.glob(os.path.join(args.seeds_dir, "logs", "*.log"))):
         model = os.path.basename(log)[:-4]
         pidf = log[:-4] + ".pid"
-        up = ("oui" if alive(pidf) else "NON") if os.path.isfile(pidf) else "?"
+        up = alive(pidf) if os.path.isfile(pidf) else "?"
         try:
             units = json.load(open(os.path.join(args.seeds_dir, model, "ledger.json")))["units"]
         except (OSError, ValueError, KeyError):
@@ -222,7 +236,7 @@ def main():
         eta = fmt_eta(now, max(rems)) if rems and None not in rems else "?"
         q = queue_of(log)   # si le log a quand même été vidé : taille de la file
         todo = f" (file {q[0]}/{q[1]})" if q else ""
-        print(f"{model:<24}{up:<7}{len(done):>11}  {(','.join(running) or '-') + todo:<22}{eta}")
+        print(f"{model:<24}{up:<14}{len(done):>11}  {(','.join(running) or '-') + todo:<22}{eta}")
 
 
 if __name__ == "__main__":
