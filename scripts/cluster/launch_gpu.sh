@@ -101,8 +101,9 @@ for m in "${MODELS[@]}"; do
   echo "[$m] GPU $gpu : ${cmd[*]}"
   [[ "$DRY" == 1 ]] && continue
   mkdir -p "$OUT/$m"
-  # setsid : nouveau groupe de processus => survit au logout ssh ; --stop tue tout le groupe
-  CUDA_VISIBLE_DEVICES="$gpu" setsid nohup "${cmd[@]}" >> "$OUT/logs/$m.log" 2>&1 < /dev/null &
+  # setsid : nouveau groupe de processus => survit au logout ssh ; --stop tue tout le groupe.
+  # PYTHONUNBUFFERED : sinon le log du modèle (un fichier) reste vide des heures (tampon Python).
+  CUDA_VISIBLE_DEVICES="$gpu" PYTHONUNBUFFERED=1 setsid nohup "${cmd[@]}" >> "$OUT/logs/$m.log" 2>&1 < /dev/null &
   echo $! > "$OUT/logs/$m.pid"
 done
 [[ "$DRY" == 1 ]] && { echo; echo "dry-run : rien lancé."; exit 0; }

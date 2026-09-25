@@ -14,6 +14,7 @@ dernière ligne, fin estimée ; par modèle : fin estimée de toute sa file.
 """
 import argparse
 import glob
+import json
 import os
 import re
 import statistics
@@ -34,19 +35,20 @@ VAL_S_PER_CASE = 70.0   # repère mesuré sur les plis M0-M2 d'origine (~17 cas 
 def parse_fold(fold_dir, default_budget):
     st = {"budget": default_budget, "n_val": None, "epoch": -1, "times": [], "dice": None,
           "ema": None, "predicted": 0, "val_done": False, "last": None, "val_start": None,
-          "cur_done": False}
+          "cur_done": False, "log_last": []}
     logs = sorted(glob.glob(os.path.join(fold_dir, "training_log_*.txt")), key=os.path.getmtime)
     for log in logs:
+        st["log_last"].append(None)
         with open(log, errors="ignore") as f:
             for line in f:
                 m = TS.match(line.rstrip())
                 if not m:
                     continue
                 t, msg = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S"), m.group(2).strip()
-                st["last"] = t
+                st["last"] = st["log_last"][-1] = t
                 if (g := EPOCH.match(msg)):
                     st["epoch"], st["predicted"], st["val_start"] = int(g.group(1)), 0, None
-                    st["cur_done"] = False
+                    st["cur_done"] = st["val_done"] = False   # reprise après un --debug validé
                 elif (g := EP_TIME.match(msg)):
                     st["times"].append(float(g.group(1)))
                     st["cur_done"] = True
@@ -139,11 +141,11 @@ def main():
     except FileNotFoundError:
         pass
     print(f"{now:%a %d %H:%M}  ({res})\n")
-    hdr = f"{'trainer':<38}{'pli':>3}  {'état':<11}{'époque':>9}{'%':>6}{'s/ép':>7}" \
+    hdr = f"{'trainer':<38}{'pli':>3}  {'état':<13}{'époque':>9}{'%':>6}{'s/ép':>7}" \
           f"{'dice':>7}{'EMA':>7}{'vu il y a':>10}  {'reste':>6}  fin du pli"
     print(hdr + "\n" + "-" * len(hdr))
 
-    per_trainer = {}   # clé (dataset, trainer) : M3 et M4 ont le même trainer
+    rows, per_trainer = [], {}   # clé (dataset, trainer) : M3 et M4 ont le même trainer
     tdirs = [t for d in ds for t in sorted(glob.glob(os.path.join(d, f"{args.pattern}__*")))]
     for tdir in tdirs:
         trainer = os.path.basename(tdir).split("__")[0]
@@ -152,46 +154,63 @@ def main():
         for fd in sorted(glob.glob(os.path.join(tdir, "fold_*"))):
             fold = int(fd.rsplit("_", 1)[1])
             st = parse_fold(fd, args.budget)
-            done_ep = completed(st)
+            sp = statistics.median(st["times"][-20:]) if st["times"] else None
+            stale = max(900, 5 * (sp or 0))
+            age = (now - st["last"]).total_seconds() if st["last"] else None
+            fresh_logs = sum(1 for t in st["log_last"] if t and (now - t).total_seconds() < stale)
             if st["val_done"]:
                 state = "terminé"
+            elif age is not None and age > stale:
+                state = "BLOQUÉ?"
             elif st["predicted"]:
                 state = f"valid {st['predicted']}/{st['n_val'] or '?'}"
             elif st["epoch"] >= 0:
                 state = "entraîne"
             else:
                 state = "démarrage"
+            if fresh_logs > 1:
+                state = "2 PROCESSUS?"   # deux logs du même pli écrits récemment
             rem = remaining_s(st)
-            age = (now - st["last"]).total_seconds() if st["last"] else None
-            sp = statistics.median(st["times"][-20:]) if st["times"] else None
-            if age is not None and not st["val_done"] and age > max(900, 5 * (sp or 0)):
-                state = "BLOQUÉ?"
-            per_trainer.setdefault((dsid, trainer), []).append((fold, st, rem, sp))
-            print(f"{label:<38}{fold:>3}  {state:<11}{done_ep:>5}/{st['budget']:<3}"
-                  f"{100 * min(done_ep / st['budget'], 1):>6.1f}{sp or 0:>7.1f}"
-                  f"{st['dice'] or '-':>7}{st['ema'] if st['ema'] is not None else 0:>7.3f}"
-                  f"{fmt_dur(age):>10}  {fmt_dur(rem):>6}  "
-                  f"{'-' if st['val_done'] else fmt_eta(now, rem)}")
+            active = state not in ("terminé", "BLOQUÉ?")
+            per_trainer.setdefault((dsid, trainer), []).append(
+                {"fold": fold, "st": st, "rem": rem, "sp": sp, "active": active})
+            rows.append([label, fold, state, st, sp, age, rem, (dsid, trainer)])
 
-    # File de chaque processus : plis pas encore commencés (absents du disque) inclus.
-    print(f"\n{'modèle (processus)':<24}{'actif':<7}{'file':>8}  {'reste':>7}  fin de la file")
+    for r in rows:   # un processus n'entraîne qu'un pli à la fois
+        if r[2] in ("entraîne", "démarrage") or r[2].startswith("valid"):
+            if sum(f["active"] for f in per_trainer[r[7]]) > 1:
+                r[2] = "DOUBLON?"
+    for label, fold, state, st, sp, age, rem, _ in rows:
+        done_ep = completed(st)
+        print(f"{label:<38}{fold:>3}  {state:<13}{done_ep:>5}/{st['budget']:<3}"
+              f"{100 * min(done_ep / st['budget'], 1):>6.1f}{sp or 0:>7.1f}"
+              f"{st['dice'] or '-':>7}{st['ema'] if st['ema'] is not None else 0:>7.3f}"
+              f"{fmt_dur(age):>10}  {fmt_dur(rem):>6}  "
+              f"{'-' if state == 'terminé' else fmt_eta(now, rem)}")
+    if any(r[2] in ("DOUBLON?", "2 PROCESSUS?") for r in rows):
+        print("\n!! Plusieurs plis actifs pour un même modèle : un processus en trop ? Vérifier :\n"
+              "   ps -eo pid,pgid,etime,args | grep -E '[n]nUNetv2_train|[o]rchestrator.py'\n"
+              "   nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader")
+
+    # Par processus : le ledger (écrit à chaque début de pli) plutôt que le log de
+    # l'orchestrateur, que Python ne vide pas tant qu'il écrit dans un fichier.
+    print(f"\n{'modèle (processus)':<24}{'actif':<7}{'plis faits':>11}  {'en cours':<22}fin estimée")
     for log in sorted(glob.glob(os.path.join(args.seeds_dir, "logs", "*.log"))):
         model = os.path.basename(log)[:-4]
-        q = queue_of(log)
         pidf = log[:-4] + ".pid"
         up = ("oui" if alive(pidf) else "NON") if os.path.isfile(pidf) else "?"
-        if not q:
-            print(f"{model:<24}{up:<7}{'?':>8}")
-            continue
-        rank, total, uid = q
-        dsid, trainer, fold = re.match(r"d(\d+)_(.+)_f(\d+)$", uid).groups()
-        folds = per_trainer.get((int(dsid), trainer), [])
-        cur = [f for f in folds if f[0] == int(fold)]
-        rem_cur = cur[0][2] if cur else None
-        sp = next((f[3] for f in reversed(folds) if f[3]), None)
-        per_fold = sp * (folds[0][1]["budget"] if folds else args.budget) + 17 * VAL_S_PER_CASE if sp else None
-        rem = None if rem_cur is None or per_fold is None else rem_cur + (total - rank) * per_fold
-        print(f"{model:<24}{up:<7}{rank:>4}/{total:<3}  {fmt_dur(rem):>7}  {fmt_eta(now, rem)}")
+        try:
+            units = json.load(open(os.path.join(args.seeds_dir, model, "ledger.json")))["units"]
+        except (OSError, ValueError, KeyError):
+            units = {}
+        done = [u for u in units.values() if u.get("state") == "done"]
+        running = [f"f{u['fold']}" for u in units.values() if u.get("state") == "running"]
+        keys = {(int(u["dataset"]), u["trainer"]) for u in units.values() if "trainer" in u}
+        rems = [f["rem"] for k in keys for f in per_trainer.get(k, []) if f["active"]]
+        eta = fmt_eta(now, max(rems)) if rems and None not in rems else "?"
+        q = queue_of(log)   # si le log a quand même été vidé : taille de la file
+        todo = f" (file {q[0]}/{q[1]})" if q else ""
+        print(f"{model:<24}{up:<7}{len(done):>11}  {(','.join(running) or '-') + todo:<22}{eta}")
 
 
 if __name__ == "__main__":
