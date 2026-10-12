@@ -127,8 +127,8 @@ then
 fi
 
 # ---- 4. plans de Dataset100, dataset.json, plis, prétraitement 3d_fullres ------------------
-plans_equal() {   # 0 si $1/nnUNetPlans.json = plans de Dataset100 (hors nom du dataset)
-  "$PY" - "$SRC_PRE/nnUNetPlans.json" "$1/nnUNetPlans.json" 2>/dev/null <<'EOF'
+plans_equal() {   # 0 si le fichier de plans $1 = plans de Dataset100 (hors nom du dataset)
+  "$PY" - "$SRC_PRE/nnUNetPlans.json" "$1" 2>/dev/null <<'EOF'
 import json, sys
 a, b = (json.load(open(p)) for p in sys.argv[1:])
 for k in ("dataset_name", "plans_name", "image_reader_writer"):
@@ -139,17 +139,17 @@ EOF
 echo "== 4. plans, plis, prétraitement"
 for i in 0 1; do
   id=${IDS[$i]}; name=${NAMES[$i]}; tp="$PRE/$name"
-  if [[ -f "$tp/.q3_ready" ]] && plans_equal "$tp" && cmp -s "$SRC_PRE/splits_final.json" "$tp/splits_final.json"; then
+  if [[ -f "$tp/.q3_ready" ]] && plans_equal "$tp/nnUNetPlans.json" && cmp -s "$SRC_PRE/splits_final.json" "$tp/splits_final.json"; then
     echo "   $name : prêt ($(cat "$tp/.q3_ready"))"; continue
   fi
   if [[ "$MODE" == check ]]; then
-    echo "   $name : À PRÉPARER (plans $(plans_equal "$tp" && echo "= Dataset100" || echo "absents ou différents"))"
+    echo "   $name : À PRÉPARER (plans $(plans_equal "$tp/nnUNetPlans.json" && echo "= Dataset100" || echo "absents ou différents"))"
     continue
   fi
   echo "   $name :"
   run nnUNetv2_extract_fingerprint -d "$id" -np "$NP"      # crée le dossier + dataset_fingerprint.json
   run nnUNetv2_move_plans_between_datasets -s 100 -t "$id" -sp nnUNetPlans -tp nnUNetPlans
-  [[ "$MODE" == dry ]] || plans_equal "$tp" || fail "plans de $name différents de ceux de Dataset100"
+  [[ "$MODE" == dry ]] || plans_equal "$tp/nnUNetPlans.json" || fail "plans de $name différents de ceux de Dataset100"
   run cp "$RAW/$name/dataset.json" "$tp/dataset.json"
   run cp "$SRC_PRE/splits_final.json" "$tp/splits_final.json"
   run nnUNetv2_preprocess -d "$id" -plans_name nnUNetPlans -c 3d_fullres -np "$NP"
@@ -161,14 +161,25 @@ for i in 0 1; do
   fi
 done
 
-# ---- 5. essais avortés de juillet (dossiers de pli sans checkpoint) ----------------------
+# ---- 5. anciennes sorties d'entraînement ------------------------------------------------
+# nnU-Net copie les plans d'un entraînement dans <trainer>/plans.json. Plans = Dataset100 :
+# sortie d'un lancement Q3, reprise (--c) si le pli a un checkpoint. Sinon (essai de juillet,
+# plans calculés sur Dataset103 lui-même = normalisation CT différente) : TOUT le dossier est
+# mis de côté, checkpoints compris ; le reprendre mélangerait deux normalisations dans M3.
 echo "== 5. anciennes sorties d'entraînement"
 for i in 0 1; do
   td="$RES/${NAMES[$i]}/nnUNetTrainerStd__nnUNetPlans__3d_fullres"
+  [[ -d "$td" ]] || continue
+  if ! plans_equal "$td/plans.json"; then
+    dst="$RES/${NAMES[$i]}/aborted_$(date +%Y%m%d)_$(basename "$td")"
+    if [[ "$MODE" == run ]]; then mv "$td" "$dst"; echo "   $(basename "$td") -> $(basename "$dst") (plans ≠ Dataset100)"
+    else echo "   ${NAMES[$i]} : entraînement aux plans ≠ Dataset100 -> sera déplacé vers $(basename "$dst")"; fi
+    continue
+  fi
   for fd in "$td"/fold_*; do
     [[ -d "$fd" ]] || continue
     if compgen -G "$fd/checkpoint_*.pth" >/dev/null; then
-      echo "   $fd : checkpoint présent, repris tel quel (--c)"; continue
+      echo "   $fd : checkpoint aux plans de Dataset100, repris (--c)"; continue
     fi
     dst="$td/aborted_$(date +%Y%m%d)_$(basename "$fd")"
     if [[ "$MODE" == run ]]; then mv "$fd" "$dst"; echo "   $(basename "$fd") -> $(basename "$dst") (sans checkpoint)"
