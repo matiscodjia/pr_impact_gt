@@ -1,29 +1,26 @@
 #!/usr/bin/env python3
-"""Stabilité du renversement pli par pli (critique R4b, proxy -- PAS une étude de graine).
+"""Fold-by-fold stability of the ranking reversal (a proxy, NOT a training-seed study).
 
-L'évaluation est out-of-fold : dans le pli k, M0, M1 et M2 sont trois réseaux entraînés
-séparément (initialisation propre, 68 cas d'entraînement) et scorés sur les mêmes ~17 cas
-tenus à l'écart. Recalculer les quatre contrastes retenus pli par pli dit si le signe de
-Δ(GT*), de Δ(GT-) et de l'interaction tient à travers cinq entraînements indépendants par
-régime. Ce n'est pas une variance de graine : les données d'entraînement ET les cas
-évalués changent d'un pli à l'autre, donc la dispersion mélange graine et difficulté.
+The evaluation is out of fold: in fold k, M0, M1 and M2 are three separately trained
+networks (own initialisation, 68 training cases) scored on the same ~17 held-out cases.
+Recomputing the four retained contrasts fold by fold tells whether the signs of
+Delta(GT*), Delta(GT-) and of the interaction hold across five independent trainings per
+regime. This is not a seed variance: both the training data and the evaluated cases
+change between folds, so the spread mixes seed and case difficulty (see seed_variance.py
+for the seed itself).
 
-Entrée  : results/metrics.csv (eval_kind == "oof")
-Sortie  : results/fold_stability.csv + tableau imprimé
+Input  : results/metrics.csv (eval_kind == "oof")
+Output : results/fold_stability.csv + printed table
 
     python analysis/fold_stability.py
 """
 
 from __future__ import annotations
 
-import os
-import sys
-
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from stats_utils import paired_cohens_d, wilcoxon_p_safe  # noqa: E402
+from prgt.stats import paired_cohens_d, wilcoxon_p_safe
 
 CONTRASTS = [("hd95", "M1_Omission"), ("hd95", "M2_Drift_mu0"),
              ("nsd", "M1_Omission"), ("nsd", "M2_Drift_mu0")]     # nsd = NSD@2mm
@@ -58,13 +55,13 @@ def main():
     print(out.round(4).to_string(index=False))
 
     per_fold = out[out.fold != "pooled"]
-    print("\nRésumé (5 plis) :")
+    print("\nSummary (5 folds):")
     for (metric, pair), g in per_fold.groupby(["metric", "pair"], sort=False):
-        lead = (g.delta_star < 0) if metric == "hd95" else (g.delta_star > 0)   # M0 en tête sur GT*
-        print(f"  {metric:5s} {pair:18s} M0 en tête sur GT* : {int(lead.sum())}/5 | "
-              f"renversement : {int(g.sign_flip.sum())}/5 | interaction de même signe : "
+        lead = (g.delta_star < 0) if metric == "hd95" else (g.delta_star > 0)   # M0 ahead on GT*
+        print(f"  {metric:5s} {pair:18s} M0 ahead on GT*: {int(lead.sum())}/5 | "
+              f"reversal: {int(g.sign_flip.sum())}/5 | interaction of the same sign: "
               f"{int((np.sign(g.interaction_mean) == np.sign(g.interaction_mean.median())).sum())}/5 | "
-              f"d ∈ [{g.d.min():+.2f}, {g.d.max():+.2f}]")
+              f"d in [{g.d.min():+.2f}, {g.d.max():+.2f}]")
 
 
 if __name__ == "__main__":

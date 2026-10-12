@@ -1,27 +1,23 @@
 #!/usr/bin/env python3
-"""P0.2 -- Comparaison d'échelle référence vs modèle, avec incertitude.
+"""Size of the reference effect relative to the model effect, with uncertainty.
 
-Le rapport LaTeX affirme "la référence pèse 5 à 20x le modèle" en comparant deux
-moyennes ponctuelles, sans intervalle de confiance. Ce script refait le calcul
-correctement :
+The technical report compared two point means ("the reference weighs 5 to 20 times the
+model") without an interval. This script redoes the comparison:
 
-  - effet référence, par modèle M et scénario s : m(M|s,case) - m(M|star,case)
-  - effet modèle, par paire (A,B) et scénario s : m(A|s,case) - m(B|s,case)
-  - pour un (metric, scenario, model_pair={A,B}) donné, l'effet référence utilisé est
-    la MOYENNE cas-par-cas des effets référence de A et de B (les deux modèles
-    effectivement comparés dans cette ligne) -- pas un modèle arbitraire pris seul.
-  - ratio = médiane(|effet référence|) / médiane(|effet modèle|), les DEUX médianes
-    recalculées sur le MÊME tirage bootstrap (les cas), IC BCa 10000 tirages, seed=42.
-    Un ratio bootstrappé indépendamment au numérateur et au dénominateur sous-estime
-    l'incertitude (ignore leur corrélation cas-à-cas) ; ``stats_utils.bca_ratio`` couple
-    explicitement les deux tirages.
+  - reference effect, per model M and scenario s: m(M|s, case) - m(M|star, case)
+  - model effect, per pair (A, B) and scenario s: m(A|s, case) - m(B|s, case)
+  - for one (metric, scenario, pair {A, B}), the reference effect is the case-wise MEAN
+    of the reference effects of A and B (the two models compared on that row), not the
+    effect of an arbitrary single model;
+  - ratio = median(|reference effect|) / median(|model effect|), both medians recomputed
+    on the SAME bootstrap resample of the cases (BCa, 10,000 resamples, seed 42).
+    Resampling numerator and denominator independently would ignore their case-wise
+    correlation and understate the uncertainty; prgt.stats.bca_ratio couples them.
 
-Sortie : results/effect_ratio.csv
+Output : results/effect_ratio.csv
   metric, reference, model_pair, ratio_median, ratio_ci_low, ratio_ci_high,
   ref_effect_abs_median, model_effect_abs_median, n, git_commit, seed, timestamp
 
-Usage
------
     python analysis/effect_ratio.py --results_dir results --seed 42 --n_boot 10000
 """
 
@@ -30,18 +26,14 @@ from __future__ import annotations
 import argparse
 import itertools
 import os
-import sys
 from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
-
-import results_store as rs  # noqa: E402
-from rank_reversal import ANALYSIS_METRICS, MODELS, load_pooled  # noqa: E402
-from stats_utils import bca_ratio  # noqa: E402
+from prgt import results_store as rs
+from prgt.stats import bca_ratio
+from rank_reversal import ANALYSIS_METRICS, MODELS, load_pooled
 
 DEGRADED_SCENARIOS = ["GT_minus_omission", "GT_minus_drift_neg", "GT_minus_drift_pos"]
 
@@ -70,7 +62,7 @@ def effect_ratio(p: pd.DataFrame, n_boot: int, seed: int) -> pd.DataFrame:
 
                 ref_effect_a = (a_s.loc[common] - a_star.loc[common]).values
                 ref_effect_b = (b_s.loc[common] - b_star.loc[common]).values
-                ref_effect = (ref_effect_a + ref_effect_b) / 2.0  # moyenne des 2 modèles de la paire
+                ref_effect = (ref_effect_a + ref_effect_b) / 2.0  # mean over the two models of the pair
 
                 model_effect = (a_s.loc[common] - b_s.loc[common]).values
 
@@ -96,7 +88,7 @@ def _stamp(df: pd.DataFrame, seed: int) -> pd.DataFrame:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="P0.2 -- Ratio effet référence / effet modèle")
+    ap = argparse.ArgumentParser(description="Reference effect / model effect ratio")
     ap.add_argument("--results_dir", default="results")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--n_boot", type=int, default=10000)
@@ -109,14 +101,14 @@ def main():
     os.makedirs(args.results_dir, exist_ok=True)
     out_path = os.path.join(args.results_dir, "effect_ratio.csv")
     df.to_csv(out_path, index=False)
-    print(f"[OK] {out_path} ({len(df)} lignes)")
+    print(f"[OK] {out_path} ({len(df)} rows)")
 
     print("\n" + "=" * 90)
-    print("RATIO EFFET RÉFÉRENCE / EFFET MODÈLE (médiane, IC 95% BCa)")
+    print("REFERENCE EFFECT / MODEL EFFECT RATIO (median, 95% BCa CI)")
     print("=" * 90)
     for _, r in df.sort_values("ratio_median", ascending=False).iterrows():
         print(f"  {r['metric']:<18} {r['reference']:<22} {r['model_pair']:<28} "
-              f"ratio={r['ratio_median']:>8.2f}  IC=[{r['ratio_ci_low']:.2f}, "
+              f"ratio={r['ratio_median']:>8.2f}  CI=[{r['ratio_ci_low']:.2f}, "
               f"{r['ratio_ci_high']:.2f}]  (|ref|={r['ref_effect_abs_median']:.4g}, "
               f"|mod|={r['model_effect_abs_median']:.4g})")
 

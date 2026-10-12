@@ -1,14 +1,45 @@
-# Python-generated files
+# Python
 __pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache/
+.venv
+
+# Data and large outputs (never in git; moved with rsync)
 data
 nnUNet_data
-.DS_Store
+predictions/
 external/
-# Virtual environments
-.venv
-.claude
+
+# Machine-specific environment (written by setup_env.sh)
+.env_nnunet
+
+# Working folder of the GPU node (the scores used by the analyses are copied to
+# results/cluster_runs/)
+results_seeds/
+configs/generated_*.yaml
+results/metrics.parquet
+
+# LaTeX build files
+report/**/*.aux
+report/**/*.log
+report/**/*.out
+report/**/*.toc
+report/**/*.bbl
+report/**/*.blg
+report/**/*.brf
+report/**/*.fls
+report/**/*.fdb_latexmk
+report/**/*.synctex.gz
+
+# ISBI paper: kept out of git until submission (26 Oct 2026)
+report/isbi/
+
+# Local archive of superseded files (backups, old notes)
+archive/
+
+# OS
+.DS_Store

@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
-"""Comptes de composantes connexes derrière le Betti-0 (§ « A caution on Betti-0 »).
+"""Connected-component counts behind the Betti-0 error (paper: "A caution on Betti-0").
 
-Le manuscrit affirme que, sous omission, la référence change (GT⁻ fragmentée) mais que le
-Betti-0 ne peut pas le voir entre modèles : si chaque prédiction a plus de composantes que
-les deux références, |ΔN| = N(P) − N(réf) et N(réf) s'annule exactement dans toute différence
-inter-modèles. Ce script mesure directement N(GT*), N(GT⁻) et N(P) (connexité 26, identique
-à ``cross_evaluate.compute_betti0``) au lieu de le déduire, et vérifie :
+The paper states that, under omission, the reference changes (GT- is fragmented) but the
+Betti-0 error cannot show it between models: if every prediction has more components than
+both references, |Delta N| = N(P) - N(ref), and N(ref) cancels exactly in any difference
+between models. This script counts N(GT*), N(GT-) and N(P) directly (26-connectivity, as
+in prgt.metrics.compute_betti0) instead of inferring them, and checks that:
 
-  1. N(GT*) = 1 pour chaque cas ;
-  2. N(P) > max(N(GT*), N(GT⁻)) pour chaque cas et chaque modèle ;
-  3. |N(P) − N(réf)| recalculé = colonne ``betti0`` de ``results/metrics.csv`` ;
-  4. interaction inter-modèles du Betti-0 nulle cas par cas.
+  1. N(GT*) = 1 for every case;
+  2. N(P) > max(N(GT*), N(GT-)) for every case and every model;
+  3. the recomputed |N(P) - N(ref)| equals the ``betti0`` column of results/metrics.csv;
+  4. the between-model Betti-0 interaction is zero case by case.
 
-Sorties : results/betti0_counts.csv (une ligne par cas), résumé sur stdout.
+Outputs: results/betti0_counts.csv (one row per case), summary on stdout.
 
-Usage
------
     python analysis/betti0_counts.py --workers 3
     python analysis/betti0_counts.py --stats-only
 """
@@ -24,16 +22,12 @@ from __future__ import annotations
 
 import argparse
 import itertools
-import os
-import sys
 from multiprocessing import Pool
 
 import numpy as np
 import pandas as pd
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-from fold_map import case_fold_map  # noqa: E402
+from prgt.folds import case_fold_map
 
 RAW = "nnUNet_data/nnUNet_raw/Dataset100_PARSE"
 RES = "nnUNet_data/nnUNet_results/Dataset100_PARSE"
@@ -75,18 +69,18 @@ def compute(workers):
 
 def check(df):
     models, refs = list(TRAINERS), list(REFS)
-    print(f"n = {len(df)} cas")
-    print(f"1. N(GT*) = 1 partout : {bool((df.N_GT_star == 1).all())} "
-          f"(valeurs : {sorted(df.N_GT_star.unique())})")
+    print(f"n = {len(df)} cases")
+    print(f"1. N(GT*) = 1 everywhere: {bool((df.N_GT_star == 1).all())} "
+          f"(values: {sorted(df.N_GT_star.unique())})")
     for ref in refs[1:]:
         v = df[f"N_{ref}"]
-        print(f"   N({ref}) : moyenne {v.mean():.1f}, médiane {v.median():.0f}, "
-              f"étendue {v.min()}–{v.max()}")
+        print(f"   N({ref}): mean {v.mean():.1f}, median {v.median():.0f}, "
+              f"range {v.min()}-{v.max()}")
     for m in models:
         v = df[f"N_{m}"]
-        print(f"   N({m}) : moyenne {v.mean():.1f}, médiane {v.median():.0f}, étendue {v.min()}–{v.max()}")
+        print(f"   N({m}): mean {v.mean():.1f}, median {v.median():.0f}, range {v.min()}-{v.max()}")
 
-    print("2. N(P) > N(réf), nombre de cas sur", len(df))
+    print("2. N(P) > N(ref), number of cases out of", len(df))
     for m in models:
         print(f"   {m:<13}" + "  ".join(f"{r}: {int((df[f'N_{m}'] > df[f'N_{r}']).sum())}" for r in refs))
 
@@ -98,9 +92,9 @@ def check(df):
             got = met[(met.model == m) & (met.scenario == r)].set_index("case").betti0
             mine = (df[f"N_{m}"] - df[f"N_{r}"]).abs().set_axis(df.case)
             bad += int((got.reindex(mine.index) != mine).sum())
-    print(f"3. |N(P) − N(réf)| ≠ metrics.csv betti0 : {bad} lignes sur {len(models) * len(refs) * len(df)}")
+    print(f"3. |N(P) - N(ref)| != metrics.csv betti0: {bad} rows out of {len(models) * len(refs) * len(df)}")
 
-    print("4. interaction Betti-0 nulle (cas sur", len(df), ")")
+    print("4. zero Betti-0 interaction (cases out of", len(df), ")")
     for a, b in itertools.combinations(models, 2):
         for r in refs[1:]:
             d_ref = ((df[f"N_{a}"] - df[f"N_{r}"]).abs() - (df[f"N_{b}"] - df[f"N_{r}"]).abs())
@@ -111,7 +105,7 @@ def check(df):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--workers", type=int, default=3)
-    ap.add_argument("--stats-only", action="store_true")
+    ap.add_argument("--stats-only", action="store_true", help="re-read results/betti0_counts.csv")
     args = ap.parse_args()
     df = pd.read_csv(OUT) if args.stats_only else compute(args.workers)
     check(df)

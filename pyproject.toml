@@ -1,7 +1,31 @@
 [project]
-name = "pr-impact-gt"
-version = "0.1.0"
-description = "Add your description here"
+name = "prgt"
+version = "1.0.0"
+description = "Reference noise and segmentation-metric rankings on PARSE pulmonary arteries (nnU-Net)"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "scikit-image>=0.21",
+    "nibabel>=5.0",
+    "pandas>=2.0",
+    "matplotlib>=3.7",
+    "pyyaml>=6.0",
+    "tqdm>=4.65",
+]
+
+[project.optional-dependencies]
+# Training side (GPU node): nnU-Net v2 and PyTorch. setup_env.sh installs them.
+train = ["nnunetv2>=2.5", "torch>=2.1", "SimpleITK>=2.2"]
+dev = ["pytest>=7"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["prgt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

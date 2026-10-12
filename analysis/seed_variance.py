@@ -1,42 +1,40 @@
 #!/usr/bin/env python3
-"""Variance de graine d'ENTRAÎNEMENT : l'interaction et l'écart sur référence propre
-sont-ils stables d'un réplicat à l'autre ?
+"""Training-seed variance: are the interaction and the clean-reference gap stable across
+independent trainings of the same regime?
 
-Réplicats : graine 0 = l'étude (results/metrics.csv : M0_Star, M1_Omission, M2_Drift_mu0) ;
-graines 1, 2... = results_seeds/<modèle>/metrics.csv (noms M0_Star_s1, ...), produits par
-scripts/cluster/launch_gpu.sh. Les analyses portent sur les cas COMMUNS à tous les
-réplicats et tous les modèles (avec un sous-ensemble de plis, n < 85 : à déclarer).
+Replicates: seed 0 = the study (results/metrics.csv: M0_Star, M1_Omission, M2_Drift_mu0);
+seeds 1, 2, ... = results/cluster_runs/<model>/metrics.csv (models M0_Star_s1, ...), scored on
+the GPU node (cluster/launch_gpu.sh) and copied there. The analysis uses the cases COMMON to every
+replicate and every model (a subset of folds, so n < 85 must be reported).
 
-Pour chaque réplicat, métrique (HD95, NSD@2) et paire (M0 vs M1, M0 vs M2) :
-    delta_star  = moyenne_cas[ m(M0|GT*) - m(Mk|GT*) ]           (écart sur référence propre)
-    delta_omis  = moyenne_cas[ m(M0|GT-) - m(Mk|GT-) ]
-    interaction = delta_omis - delta_star, d de Cohen apparié, changement de signe
-Puis, entre réplicats : moyenne / écart-type / min / max de delta_star et de l'interaction,
-et nombre de réplicats où l'écart change de signe. Le changement de signe est aussi jugé par la
-règle MDD de l'étude (analysis/mdd_crossing.py) : croisement résolu si |delta_omis| >= MDD =
-(z_.975 + z_.80) sd(iota) / sqrt(n), strict si en plus Wilcoxon(iota) p brut < 0,05. C'est ce qui répond à « −0,12 mm de HD95
-sur référence propre dépasse-t-il la variance de graine ? » -- sans prétendre à un IC :
-2 à 3 réplicats ne permettent qu'une plage, pas un intervalle.
+For each replicate, metric (HD95, NSD@2) and pair (M0 vs M1, M0 vs M2):
+    delta_star  = mean over cases of m(M0|GT*) - m(Mk|GT*)     (gap on the clean reference)
+    delta_omis  = mean over cases of m(M0|GT-) - m(Mk|GT-)
+    interaction = delta_omis - delta_star, paired Cohen's d, sign change
+The sign change is also judged by the study's MDD rule (analysis/mdd_crossing.py): the
+crossing is resolved if |delta_omis| >= MDD = (z_.975 + z_.80) sd(iota) / sqrt(n), and
+strict if, in addition, the raw Wilcoxon p(iota) < 0.05. Across replicates: mean / standard
+deviation / min / max of delta_star and of the interaction, and the number of replicates
+with a sign change (or a strict reversal). Two or three replicates give a range, not a
+confidence interval.
 
-Sortie : results/seed_variance.csv
+Output : results/seed_variance.csv
 
-Usage : python analysis/seed_variance.py [--seeds-dir results_seeds]
+    python analysis/seed_variance.py [--seeds-dir results/cluster_runs]
 """
 import argparse
 import glob
 import os
-import sys
 
 import numpy as np
 import pandas as pd
 from scipy.stats import norm, wilcoxon
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from stats_utils import paired_cohens_d  # noqa: E402
+from prgt.stats import paired_cohens_d
 
 BASE = {"M0": "M0_Star", "M1": "M1_Omission", "M2": "M2_Drift_mu0"}
 METRICS = ("hd95", "nsd")
-Z = norm.ppf(0.975) + norm.ppf(0.80)   # MDD à 80 % de puissance, bilatéral 5 %
+Z = norm.ppf(0.975) + norm.ppf(0.80)   # MDD at 80 % power, two-sided 5 %
 
 
 def load(seeds_dir):
@@ -53,16 +51,16 @@ def load(seeds_dir):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--seeds-dir", default="results_seeds")
+    ap.add_argument("--seeds-dir", default="results/cluster_runs")
     args = ap.parse_args()
     df = load(args.seeds_dir)
 
-    # cas communs : présents pour les 3 modèles, les 2 références, dans TOUS les réplicats
+    # common cases: present for the 3 models and the 2 references in EVERY replicate
     need = df.groupby(["seed", "case"]).apply(lambda g: g[["role", "scenario"]].drop_duplicates().shape[0] == 6)
     ok = need.unstack("seed").fillna(False).all(axis=1)
     common = ok[ok].index
     seeds = sorted(int(s) for s in df.seed.unique())
-    print(f"réplicats: {seeds} | cas communs: {len(common)}")
+    print(f"replicates: {seeds} | common cases: {len(common)}")
     df = df[df.case.isin(common)]
 
     rows = []
@@ -99,8 +97,8 @@ def main():
     out.to_csv("results/seed_variance.csv", index=False)
     pd.set_option("display.width", 240); pd.set_option("display.max_columns", 30)
     print(per.round(4).to_string(index=False))
-    print("\n-- entre réplicats (sign_flip / strict = nombre de réplicats avec inversion / avec inversion"
-          " au-delà de la MDD et p < 0,05) --")
+    print("\n-- across replicates (sign_flip / strict = number of replicates with a sign change /"
+          " with a change beyond the MDD and p < 0.05) --")
     print(pd.DataFrame(summ).round(4).to_string(index=False))
 
 

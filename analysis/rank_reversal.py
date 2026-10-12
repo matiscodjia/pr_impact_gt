@@ -1,50 +1,43 @@
 #!/usr/bin/env python3
-"""P0.1 -- Test de retournement de classement (LE résultat).
+"""The main result: does the ranking of the models reverse when the reference is degraded?
 
-Lit ``results/metrics.csv`` (tier A : M0_Star, M1_Omission, M2_Drift_mu0 x GT_star,
-GT_minus_omission, GT_minus_drift_neg, GT_minus_drift_pos, n=85 cas, OOF) et produit :
+Reads results/metrics.csv (M0_Star, M1_Omission, M2_Drift_mu0 x GT_star,
+GT_minus_omission, GT_minus_drift_neg, GT_minus_drift_pos, n = 85 cases, out of fold) and
+writes:
 
-  (a) results/inter_model_by_reference.csv -- contrastes appariés par paire de modèles,
-      pour chaque scénario et chaque métrique.
-  (b) results/rank_reversal_tests.csv -- test d'interaction (star vs. chaque scénario
-      dégradé) : LE test propre du retournement de classement.
-  (c) results/rank_matrix.csv -- matrice de rangs (1=meilleur) par (métrique, scénario).
-  (d) results/rank_stability_bootstrap.csv -- stabilité bootstrap du classement.
+  (a) results/inter_model_by_reference.csv -- paired contrasts per pair of models, for
+      every scenario and metric.
+  (b) results/rank_reversal_tests.csv -- interaction test (GT* vs each degraded
+      scenario): the proper test of a ranking reversal.
+  (c) results/rank_matrix.csv -- rank of each model (1 = best) per (metric, scenario).
+  (d) results/rank_stability_bootstrap.csv -- bootstrap stability of the ranking.
 
 Conventions
 -----------
-- ``volume_delta`` est signé (biais directionnel, sans "meilleur" naturel) ; pour le
-  classement/l'interaction on utilise sa magnitude ``volume_delta_abs = |volume_delta|``
-  (biais plus petit = meilleur), toujours dans la même liste de métriques que les 5
-  autres. Le signe brut reste disponible dans metrics.csv pour toute analyse dirigée
-  (cf. Q1 dans report.py).
-- Point estimé apparié = MÉDIANE des différences par cas (colonnes ``delta_median`` /
-  ``interaction_median``), cohérent avec le test de signe Wilcoxon. Cohen's d suit la
-  convention standard (moyenne/écart-type des différences), donc peut différer
-  légèrement en magnitude de la médiane -- c'est attendu, ce sont deux résumés
-  différents de la même distribution de différences.
-- Dans (b), ``delta_s1``/``delta_s2`` sont les MOYENNES appariées (A-B) à chaque
-  scénario -- volontairement différentes de ``interaction_median`` : ce sont ces
-  moyennes qui correspondent aux valeurs de Table 5.5 du rapport (moyennes par cas) et
-  donc à la définition même du "retournement" telle que posée dans le brief (l'ordre
-  des moyennes M0/M1/M2 s'inverse). On a mesuré empiriquement que la MÉDIANE appariée
-  peut être exactement 0 (nombreuses quasi-égalités cas par cas) alors que la MOYENNE
-  bascule nettement -- HD95(M0,M1) sous star : médiane des diffs = 0.0 mais moyenne =
-  -0.12 -- donc ``is_reversal`` doit se baser sur les moyennes pour capturer le
-  retournement réel, pas sur la médiane qui masquerait le signal par ex-aequo.
-- IC 95% bootstrap BCa, 10000 réechantillonnages sur les CAS (pas sur les métriques),
-  seed=42.
-- FDR Benjamini-Hochberg appliqué UNE SEULE FOIS sur l'union des tests (a)+(b) (colonne
-  ``family`` pour tracer le sous-groupe), q=0.05.
-- ``is_reversal`` (b) : critère strict de croisement -- le signe de
-  ``m(A|s1)-m(B|s1)`` diffère de celui de ``m(A|s2)-m(B|s2)`` (calculés séparément,
-  pas seulement déduit du signe de l'interaction), ET le test d'interaction est
-  significatif après FDR. C'est plus strict que "signe de l'interaction opposé au
-  signe à s1" seul (qui peut n'être qu'une atténuation sans franchissement de zéro) ;
-  documenté ici pour que RESULTS_P0.md puisse distinguer les deux.
+- ``volume_delta`` is signed (a directional bias with no natural "better"); for ranking
+  and interaction its magnitude ``volume_delta_abs = |volume_delta|`` is used (smaller
+  bias = better), always alongside the five other metrics. The signed value stays in
+  metrics.csv for directional analyses.
+- The paired point estimate is the MEDIAN of the per-case differences (columns
+  ``delta_median`` / ``interaction_median``), consistent with the Wilcoxon signed-rank
+  test. Cohen's d follows the usual convention (mean / standard deviation of the
+  differences), so its magnitude can differ slightly from the median: they are two
+  summaries of the same distribution of differences.
+- In (b), ``delta_s1`` / ``delta_s2`` are the paired MEANS (A - B) in each scenario, on
+  purpose different from ``interaction_median``: the reversal is defined on the means
+  (the order of the mean scores of M0/M1/M2 flips). The paired MEDIAN can be exactly 0
+  (many near-ties case by case) while the MEAN clearly changes sign -- e.g. HD95(M0, M1)
+  under GT*: median difference 0.0 but mean -0.12 -- so ``is_reversal`` uses the means.
+- 95 % BCa bootstrap intervals, 10,000 resamples of the CASES (not of the metrics),
+  seed 42.
+- Benjamini-Hochberg FDR applied ONCE to the union of the tests (a) + (b) (column
+  ``family`` records the subgroup), q = 0.05.
+- ``is_reversal`` in (b) is a strict crossing: the sign of m(A|s1) - m(B|s1) differs
+  from that of m(A|s2) - m(B|s2) (each computed separately, not inferred from the sign of
+  the interaction), AND the interaction test is significant after FDR. This is stricter
+  than "the interaction has the opposite sign of the s1 gap", which can be a mere
+  attenuation without crossing zero.
 
-Usage
------
     python analysis/rank_reversal.py --results_dir results --seed 42 --n_boot 10000
 """
 
@@ -53,26 +46,22 @@ from __future__ import annotations
 import argparse
 import itertools
 import os
-import sys
 from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
 from scipy.stats import kendalltau
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
-
-import results_store as rs  # noqa: E402
-from report import pooled  # noqa: E402
-from stats_utils import bca_median_diff, bh_fdr, paired_cohens_d, wilcoxon_p_safe  # noqa: E402
+from prgt import results_store as rs
+from prgt.results_store import pooled
+from prgt.stats import bca_median_diff, bh_fdr, paired_cohens_d, wilcoxon_p_safe
 
 MODELS = ["M0_Star", "M1_Omission", "M2_Drift_mu0"]
 SCENARIOS = ["GT_star", "GT_minus_omission", "GT_minus_drift_neg", "GT_minus_drift_pos"]
 RAW_METRICS = ["cldice", "hd95", "nsd", "nsd05", "betti0", "volume_delta"]
-# Métrique utilisée pour classement/interaction : volume_delta -> magnitude du biais.
+# Metrics used for ranking and interaction: volume_delta -> magnitude of the bias.
 ANALYSIS_METRICS = ["cldice", "hd95", "nsd", "nsd05", "betti0", "volume_delta_abs"]
-DIRECTION = {  # "higher" = plus grand est meilleur ; "lower" = plus petit est meilleur
+DIRECTION = {  # "higher" = larger is better; "lower" = smaller is better
     "cldice": "higher", "nsd": "higher", "nsd05": "higher",
     "hd95": "lower", "betti0": "lower", "volume_delta_abs": "lower",
 }
@@ -81,20 +70,20 @@ DIRECTION = {  # "higher" = plus grand est meilleur ; "lower" = plus petit est m
 def load_pooled(results_dir: str) -> pd.DataFrame:
     df = rs.load(results_dir)
     if df.empty:
-        raise SystemExit(f"[FATAL] {results_dir}/metrics.csv vide ou absent -- rien à analyser.")
+        raise SystemExit(f"[FATAL] {results_dir}/metrics.csv empty or missing: nothing to analyse.")
     p = pooled(df, "oof")
     missing_models = set(MODELS) - set(p["model"].unique())
     missing_scen = set(SCENARIOS) - set(p["scenario"].unique())
     if missing_models or missing_scen:
-        print(f"[WARN] modèles manquants: {missing_models or 'aucun'}, "
-              f"scénarios manquants: {missing_scen or 'aucun'}")
+        print(f"[WARN] missing models: {missing_models or 'none'}, "
+              f"missing scenarios: {missing_scen or 'none'}")
     p = p[p["model"].isin(MODELS) & p["scenario"].isin(SCENARIOS)].copy()
     p["volume_delta_abs"] = p["volume_delta"].abs()
     return p
 
 
 def build_wide(p: pd.DataFrame, metric: str) -> pd.DataFrame:
-    """Table indexée par cas, colonnes (model,scenario) -- aligne automatiquement par cas."""
+    """Table indexed by case with (model, scenario) columns, so values align by case."""
     return p.pivot_table(index="case", columns=["model", "scenario"], values=metric)
 
 
@@ -102,9 +91,9 @@ def _series(wide: pd.DataFrame, model: str, scenario: str) -> pd.Series:
     return wide[(model, scenario)].dropna()
 
 
-# ─────────────────────────────────────────────────────────────────
-# (a) Contrastes inter-modèles par référence
-# ─────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------------------------
+# (a) Between-model contrasts for each reference
+# ---------------------------------------------------------------------------------------------
 
 def inter_model_by_reference(p: pd.DataFrame, n_boot: int, seed: int) -> pd.DataFrame:
     rows = []
@@ -133,9 +122,9 @@ def inter_model_by_reference(p: pd.DataFrame, n_boot: int, seed: int) -> pd.Data
     return pd.DataFrame(rows)
 
 
-# ─────────────────────────────────────────────────────────────────
-# (b) Test d'interaction -- LE test du retournement
-# ─────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------------------------
+# (b) Interaction test: the test of the ranking reversal
+# ---------------------------------------------------------------------------------------------
 
 def rank_reversal_tests(p: pd.DataFrame, n_boot: int, seed: int) -> pd.DataFrame:
     rows = []
@@ -160,8 +149,7 @@ def rank_reversal_tests(p: pd.DataFrame, n_boot: int, seed: int) -> pd.DataFrame
                 d = paired_cohens_d(interaction)
                 med, ci_lo, ci_hi = bca_median_diff(interaction, n_boot=n_boot, seed=seed)
 
-                # Moyennes (pas médianes) : ce sont elles qui définissent le
-                # retournement au sens de Table 5.5 -- voir docstring du module.
+                # Means (not medians) define the reversal; see the module docstring.
                 delta_s1 = float(np.mean(delta_s1_case))
                 delta_s2 = float(np.mean(delta_s2_case))
                 rows.append({
@@ -178,9 +166,9 @@ def rank_reversal_tests(p: pd.DataFrame, n_boot: int, seed: int) -> pd.DataFrame
     return pd.DataFrame(rows)
 
 
-# ─────────────────────────────────────────────────────────────────
-# (c) Matrice de rangs
-# ─────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------------------------
+# (c) Rank matrix
+# ---------------------------------------------------------------------------------------------
 
 def rank_matrix(p: pd.DataFrame) -> pd.DataFrame:
     rows = []
@@ -197,14 +185,14 @@ def rank_matrix(p: pd.DataFrame) -> pd.DataFrame:
             row = {"metric": metric, "scenario": scenario}
             for m in MODELS:
                 row[f"rank_{m}"] = ranks[m]
-            row["order_signature"] = "<".join(order)  # meilleur -> pire
+            row["order_signature"] = "<".join(order)  # best -> worst
             rows.append(row)
     return pd.DataFrame(rows)
 
 
-# ─────────────────────────────────────────────────────────────────
-# (d) Stabilité bootstrap du classement
-# ─────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------------------------
+# (d) Bootstrap stability of the ranking
+# ---------------------------------------------------------------------------------------------
 
 def _order_of(means: dict, metric: str) -> tuple:
     ascending = DIRECTION[metric] == "lower"
@@ -215,7 +203,7 @@ def rank_stability_bootstrap(p: pd.DataFrame, n_boot: int, seed: int) -> pd.Data
     rows = []
     for metric in ANALYSIS_METRICS:
         wide = build_wide(p, metric)
-        # cas communs aux 3 modèles sous GT_star (référence pour l'ordre observé)
+        # cases common to the 3 models under GT_star (reference for the observed order)
         star_cols = {m: wide[(m, "GT_star")] for m in MODELS}
         common_star = None
         for s in star_cols.values():
@@ -244,8 +232,8 @@ def rank_stability_bootstrap(p: pd.DataFrame, n_boot: int, seed: int) -> pd.Data
             n_differ = 0
             taus = np.empty(n_boot)
 
-            # pour tau : ré-échantillonnage joint des cas communs à star ET scenario
-            # (mêmes identités de cas -> même tirage d'indices sur le sous-ensemble commun)
+            # for tau: joint resampling of the cases common to GT* AND the scenario
+            # (same case identities -> same index draw on the common subset)
             common_both = common_star.intersection(common)
             n_both = len(common_both)
             idx_tau = rng.integers(0, n_both, size=(n_boot, n_both)) if n_both >= 5 else None
@@ -292,9 +280,9 @@ def rank_stability_bootstrap(p: pd.DataFrame, n_boot: int, seed: int) -> pd.Data
     return pd.DataFrame(rows)
 
 
-# ─────────────────────────────────────────────────────────────────
-# FDR combiné + écriture
-# ─────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------------------------
+# Combined FDR and output
+# ---------------------------------------------------------------------------------------------
 
 def apply_combined_fdr(df_a: pd.DataFrame, df_b: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     n_a = len(df_a)
@@ -320,13 +308,13 @@ def _stamp(df: pd.DataFrame, seed: int) -> pd.DataFrame:
 def print_reversals(df_b: pd.DataFrame) -> None:
     sig = df_b[df_b["is_reversal"]].sort_values("p_fdr")
     print("\n" + "=" * 100)
-    print("RETOURNEMENTS DE CLASSEMENT SIGNIFICATIFS (p_FDR < 0.05, croisement de signe strict)")
+    print("SIGNIFICANT RANKING REVERSALS (p_FDR < 0.05, strict sign crossing)")
     print("=" * 100)
     if sig.empty:
-        print("  Aucun.")
+        print("  None.")
         return
-    print(f"  {'métrique':<18} {'paire':<28} {'star -> scénario':<24} "
-          f"{'Δ_star':>10} {'Δ_scénario':>10} {'p_FDR':>10} {'d':>8}")
+    print(f"  {'metric':<18} {'pair':<28} {'star -> scenario':<24} "
+          f"{'d_star':>10} {'d_scenario':>10} {'p_FDR':>10} {'d':>8}")
     for _, r in sig.iterrows():
         pair = f"{r['model_a']} vs {r['model_b']}"
         transition = f"star -> {r['scenario_2']}"
@@ -335,15 +323,15 @@ def print_reversals(df_b: pd.DataFrame) -> None:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="P0.1 -- Test de retournement de classement")
+    ap = argparse.ArgumentParser(description="Ranking-reversal test")
     ap.add_argument("--results_dir", default="results")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--n_boot", type=int, default=10000)
     args = ap.parse_args()
 
     p = load_pooled(args.results_dir)
-    print(f"[DATA] {p['case'].nunique()} cas, modèles={sorted(p['model'].unique())}, "
-          f"scénarios={sorted(p['scenario'].unique())}")
+    print(f"[DATA] {p['case'].nunique()} cases, models={sorted(p['model'].unique())}, "
+          f"scenarios={sorted(p['scenario'].unique())}")
 
     df_a = inter_model_by_reference(p, args.n_boot, args.seed)
     df_b = rank_reversal_tests(p, args.n_boot, args.seed)
@@ -362,11 +350,11 @@ def main():
     df_c.to_csv(os.path.join(args.results_dir, "rank_matrix.csv"), index=False)
     df_d.to_csv(os.path.join(args.results_dir, "rank_stability_bootstrap.csv"), index=False)
 
-    print(f"[OK] inter_model_by_reference.csv ({len(df_a)} lignes)")
-    print(f"[OK] rank_reversal_tests.csv ({len(df_b)} lignes, "
-          f"{int(df_b['is_reversal'].sum())} retournement(s))")
-    print(f"[OK] rank_matrix.csv ({len(df_c)} lignes)")
-    print(f"[OK] rank_stability_bootstrap.csv ({len(df_d)} lignes)")
+    print(f"[OK] inter_model_by_reference.csv ({len(df_a)} rows)")
+    print(f"[OK] rank_reversal_tests.csv ({len(df_b)} rows, "
+          f"{int(df_b['is_reversal'].sum())} reversal(s))")
+    print(f"[OK] rank_matrix.csv ({len(df_c)} rows)")
+    print(f"[OK] rank_stability_bootstrap.csv ({len(df_d)} rows)")
 
     print_reversals(df_b)
 

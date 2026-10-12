@@ -1,36 +1,34 @@
 #!/usr/bin/env python3
-"""Dose-réponse en p (taux d'omission) du renversement HD95 / NSD@2mm.
+"""Dose-response of the HD95 / NSD@2mm reversal in the omission rate p.
 
-Question (critique R3 de la relecture) : le mécanisme « M0 prédit des branches que la
-référence a retirées » prédit que l'interaction
+The mechanism "M0 predicts branches that the reference removed" predicts that the
+interaction
 
     iota(p) = (m(M0|GT-_p) - m(M_k|GT-_p)) - (m(M0|GT*) - m(M_k|GT*))
 
-croît avec p. On régénère GT- avec la MÊME graine par cas que la référence de l'étude
-(seed_base = 42 + index du cas dans l'ordre trié de labelsTr) et on change seulement p.
-La sélection étant ``rng.random(n) < p``, les omissions sont EMBOÎTÉES quand p croît :
-GT-(0.5) ⊂ GT-(0.3) ⊂ GT-(0.1) -- vérifié dans ce script (``nested_ok``).
+grows with p. GT- is regenerated with the SAME per-case seed as the study's reference
+(seed_base = 42 + index of the case in the sorted labelsTr) and only p changes. Since the
+selection is ``rng.random(n) < p``, the omissions are NESTED as p grows:
+GT-(0.5) is contained in GT-(0.3), itself in GT-(0.1) -- checked here (``nested_ok``).
 
-Validation : le p=0.3 régénéré doit être identique voxel à voxel au jeu déjà sur disque
-(``labelsTr_GT_minus_omission``) ; sinon la convention d'index/graine est fausse et les
-autres p ne sont pas comparables (``matches_stored``). Le calcul est fait sur la boîte
-englobante de GT* (+ marge) : exact, car l'ouverture (boule r) et l'étiquetage des
-composantes ne dépendent pas du fond vide.
+Validation: the regenerated p = 0.3 must equal, voxel for voxel, the reference already on
+disk (labelsTr_GT_minus_omission); otherwise the index/seed convention is wrong and the
+other p are not comparable (``matches_stored``). The noise is computed on the bounding box
+of GT* (+ margin): exact, because the opening (ball r) and the component labelling do not
+depend on empty background.
 
-Aucune ré-inférence : les prédictions OOF sont lues telles quelles.
+No new inference: the out-of-fold predictions are read as they are.
 
-Sorties : results/dose_response<tag>_metrics.csv (par cas x modèle x référence),
-          results/dose_response<tag>.csv (interaction par p et par paire),
-          results/dose_response<tag>_checks.csv (validations par cas).
+Outputs: results/dose_response<tag>_metrics.csv (per case x model x reference),
+         results/dose_response<tag>.csv (interaction per p and per pair),
+         results/dose_response<tag>_checks.csv (per-case validations).
 
-Tirages multiples de GT- (variance de la réalisation du bruit) : ``--seed S --tag _drawS``
-avec une graine de base qui change (S = 42 est l'étude ; utiliser 1042, 2042... : les
-graines par cas valent S + index, un pas de 1000 évite tout recouvrement entre tirages).
+Several draws of GT- (variance of the noise realisation): ``--seed S --tag _drawS`` with a
+different base seed (S = 42 is the study; use 1042, 2042, ...: per-case seeds are
+S + index, so a step of 1000 avoids any overlap between draws).
 
-Usage
------
     python analysis/dose_response.py --workers 4
-    python analysis/dose_response.py --stats-only      # ré-agrège sans recalculer
+    python analysis/dose_response.py --stats-only      # re-aggregate without recomputing
     python analysis/dose_response.py --ps 0.3 --seed 1042 --tag _draw1042 --workers 32
     python analysis/dose_response.py --ps 0.1 0.15 0.2 0.25 0.3 --tag _fine --ref-cldice
 """
@@ -40,18 +38,14 @@ from __future__ import annotations
 import argparse
 import glob
 import os
-import sys
 from multiprocessing import Pool
 
 import numpy as np
 import pandas as pd
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.join(HERE, "..", "scripts"))
-
-from stats_utils import bca_mean_diff, paired_cohens_d, wilcoxon_p_safe  # noqa: E402
-from fold_map import case_fold_map  # noqa: E402
+from prgt.folds import case_fold_map
+from prgt.metrics import SurfaceFeatures, union_bbox
+from prgt.stats import bca_mean_diff, paired_cohens_d, wilcoxon_p_safe
 
 RAW = "nnUNet_data/nnUNet_raw/Dataset100_PARSE"
 RES = "nnUNet_data/nnUNet_results/Dataset100_PARSE"
@@ -59,52 +53,31 @@ TRAINERS = {"M0_Star": "nnUNetTrainerStd",
             "M1_Omission": "nnUNetTrainerDegradedOmissionOnly",
             "M2_Drift_mu0": "nnUNetTrainerDriftMu0"}
 R_OPEN = 2
-MARGIN = 8            # >= r pour l'ouverture, + marge de surface
+MARGIN = 8            # >= r of the opening, plus a surface margin
 STORED_P = 0.3
-
-
-class _Feat:
-    """Sous-ensemble léger de PredFeatures (sans squelette : inutile pour HD95/NSD)."""
-
-    def __init__(self, pred, spacing):
-        from scipy.ndimage import binary_erosion, distance_transform_edt
-        self.spacing = spacing
-        self.bool = pred
-        self.any = bool(pred.any())
-        self.dt = distance_transform_edt(~pred, sampling=spacing)
-        self.surf = pred ^ binary_erosion(pred, structure=np.ones((3, 3, 3)))
-        self.dt_from_surf = distance_transform_edt(~self.surf, sampling=spacing)
-
-
-def _bbox(mask, margin):
-    sl = []
-    for ax in range(3):
-        nz = np.where(mask.any(axis=tuple(i for i in range(3) if i != ax)))[0]
-        sl.append(slice(max(0, int(nz[0]) - margin), int(nz[-1]) + 1 + margin))
-    return tuple(sl)
 
 
 def _task(args):
     import nibabel as nib
-    from cross_evaluate import _hd95_cached, _nsd_cached, compute_cldice
-    from degradations import apply_degradation_pipeline
+    from prgt.metrics import compute_cldice, hd95_from_features, nsd_from_features
+    from prgt.noise import apply_noise_configs
 
     idx, case, fold, ps, seed, ref_cldice = args
     nii = nib.load(f"{RAW}/labelsTr/{case}")
     spacing = tuple(float(s) for s in nii.header.get_zooms()[:3])
     star_full = np.asanyarray(nii.dataobj) > 0
-    stored_path = f"{RAW}/labelsTr_GT_minus_omission/{case}"      # absent => pas de validation croisée
+    stored_path = f"{RAW}/labelsTr_GT_minus_omission/{case}"      # missing => no cross-check
     stored = np.asanyarray(nib.load(stored_path).dataobj) > 0 if os.path.exists(stored_path) else None
     preds_full = {m: np.asanyarray(nib.load(
         f"{RES}/{t}__nnUNetPlans__3d_fullres/fold_{fold}/validation/{case}").dataobj) > 0
         for m, t in TRAINERS.items()}
 
-    # boîte de GT* pour dégrader ; boîte union (avec prédictions) pour évaluer
-    bb = _bbox(star_full, MARGIN)
+    # GT* box to apply the noise; union box (with the predictions) to score
+    bb = union_bbox([star_full], MARGIN)
     star = star_full[bb]
     refs = {}
     for p in ps:
-        deg = apply_degradation_pipeline(
+        deg = apply_noise_configs(
             star[np.newaxis].astype(np.float32),
             [{"family": "distal_omission", "r": R_OPEN, "p": float(p)}],
             seed_base=seed + idx, spacing=spacing)[0] > 0
@@ -115,26 +88,26 @@ def _task(args):
     info = {"case": case, "matches_stored": bool(np.array_equal(refs[STORED_P], stored))
             if (STORED_P in refs and stored is not None) else None}
     ordered = sorted(ps)
-    info["nested_ok"] = all(not (refs[b] & ~refs[a]).any()          # GT-(b) ⊂ GT-(a) pour b>a
+    info["nested_ok"] = all(not (refs[b] & ~refs[a]).any()          # GT-(b) within GT-(a) for b > a
                             for a, b in zip(ordered[:-1], ordered[1:]))
     for p in ps:
         info[f"omitted_vox_p{p}"] = int((star_full & ~refs[p]).sum())
-        if ref_cldice:                   # sévérité de la référence elle-même (fenêtre [0.85, 0.90])
+        if ref_cldice:                   # severity of the reference itself (window [0.85, 0.90])
             info[f"cldice_ref_p{p}"] = compute_cldice(refs[p][bb], star)
 
     union = star_full.copy()
     for m in preds_full.values():
         union |= m
-    ub = _bbox(union, 2)
+    ub = union_bbox([union], 2)
     star_c = star_full[ub]
     refs_c = {p: refs[p][ub] for p in ps}
 
     rows = []
     for m, pred in preds_full.items():
-        pf = _Feat(pred[ub], spacing)
+        pf = SurfaceFeatures(pred[ub], spacing)
         for name, g in [("GT_star", star_c)] + [(f"p{p}", refs_c[p]) for p in ps]:
             rows.append({"case": case, "model": m, "ref": name,
-                         "hd95": _hd95_cached(pf, g), "nsd": _nsd_cached(pf, g, 2.0)})
+                         "hd95": hd95_from_features(pf, g), "nsd": nsd_from_features(pf, g, 2.0)})
     return rows, info
 
 
@@ -146,7 +119,7 @@ def compute(args):
     folds = case_fold_map()
     cases = [os.path.basename(f) for f in sorted(glob.glob(f"{RAW}/labelsTr/*.nii.gz"))]
     tasks = [(i, c, int(folds[c]), args.ps, args.seed, args.ref_cldice) for i, c in enumerate(cases)]
-    if args.limit:                       # essai rapide : les N premiers cas seulement
+    if args.limit:                       # quick trial: first N cases only
         tasks = tasks[:args.limit]
     with Pool(args.workers, maxtasksperchild=2) as pool:
         out = pool.map(_task, tasks, chunksize=1)
@@ -154,13 +127,13 @@ def compute(args):
     info = pd.DataFrame([i for _, i in out])
     df.to_csv(_path(args, "_metrics"), index=False)
     info.to_csv(_path(args, "_checks"), index=False)
-    if args.seed == 42 and info.matches_stored.notna().any():   # réf. stockée = graine 42
-        print(f"validation p=0.3 == référence stockée : {int(info.matches_stored.sum())}/{len(info)} cas")
-    print(f"omissions emboîtées : {int(info.nested_ok.sum())}/{len(info)} cas")
+    if args.seed == 42 and info.matches_stored.notna().any():   # the stored reference uses seed 42
+        print(f"regenerated p=0.3 == stored reference: {int(info.matches_stored.sum())}/{len(info)} cases")
+    print(f"nested omissions: {int(info.nested_ok.sum())}/{len(info)} cases")
     if args.ref_cldice:
         for p in args.ps:
             c = info[f"cldice_ref_p{p}"]
-            print(f"clDice(GT-_p{p}, GT*) = {c.mean():.4f}  ({(c.between(0.85, 0.90)).mean():.0%} des cas dans [0.85, 0.90])")
+            print(f"clDice(GT-_p{p}, GT*) = {c.mean():.4f}  ({(c.between(0.85, 0.90)).mean():.0%} of cases in [0.85, 0.90])")
     return df
 
 
@@ -197,11 +170,11 @@ def main():
     ap.add_argument("--ps", type=float, nargs="+", default=[0.1, 0.3, 0.5])
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--stats-only", action="store_true")
-    ap.add_argument("--tag", default="", help="suffixe des fichiers de sortie, ex. _draw1042")
-    ap.add_argument("--limit", type=int, default=0, help="n'évaluer que les N premiers cas (essai)")
+    ap.add_argument("--stats-only", action="store_true", help="re-read the per-case CSV")
+    ap.add_argument("--tag", default="", help="suffix of the output files, e.g. _draw1042")
+    ap.add_argument("--limit", type=int, default=0, help="only evaluate the first N cases (trial)")
     ap.add_argument("--ref-cldice", action="store_true",
-                    help="mesurer aussi clDice(GT-_p, GT*) par cas (dans *_checks.csv)")
+                    help="also measure clDice(GT-_p, GT*) per case (in *_checks.csv)")
     args = ap.parse_args()
     df = (pd.read_csv(_path(args, "_metrics")) if args.stats_only else compute(args))
     stats(df, args.seed, args)

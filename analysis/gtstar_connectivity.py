@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Nombre de composantes connexes de GT* selon la connexité (6, 18, 26).
+"""Number of connected components of GT* under 6-, 18- and 26-connectivity.
 
-Question : PARSE est réputé contenir des annotations déjà fragmentées, alors que le
-manuscrit écrit N(GT*) = 1 dans chaque cas. Ce comptage dépend de la connexité : l'étude
-utilise la connexité 26 (cross_evaluate.compute_betti0, betti0_counts.py), où deux voxels
-qui ne se touchent que par un coin sont connexes. Ce script compte N(GT*) dans les trois
-connexités, et mesure la taille des composantes hors de la principale.
+PARSE is said to contain fragmented annotations, while the paper states N(GT*) = 1 for
+every case. The count depends on the connectivity: the study uses 26-connectivity
+(prgt.metrics.compute_betti0, betti0_counts.py), in which two voxels that only share a
+corner are connected. This script counts N(GT*) under the three connectivities and
+measures the size of the components outside the main one.
 
-Sortie : results/gtstar_connectivity.csv (une ligne par cas) + résumé.
-Usage  : python analysis/gtstar_connectivity.py --workers 6
+Output : results/gtstar_connectivity.csv (one row per case) + printed summary.
+
+    python analysis/gtstar_connectivity.py --workers 6
 """
 import argparse
 import glob
@@ -19,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 RAW = "nnUNet_data/nnUNet_raw/Dataset100_PARSE/labelsTr"
-NAMES = {1: "6", 2: "18", 3: "26"}
+NAMES = {1: "6", 2: "18", 3: "26"}   # scipy connectivity rank -> neighbourhood size
 
 
 def count(path):
@@ -48,9 +49,9 @@ def main():
     for name in NAMES.values():
         n = d[f"n_conn{name}"]
         frac = d[f"outside_main_conn{name}"] / d.voxels
-        print(f"connexité {name:>2}: N=1 dans {(n == 1).sum()}/{len(d)} cas ; N médian {n.median():.0f}, "
-              f"max {n.max()} ; 2e composante max {d[f'second_conn{name}'].max()} vox ; "
-              f"volume hors composante principale : médian {frac.median():.4%}, max {frac.max():.4%}")
+        print(f"connectivity {name:>2}: N=1 in {(n == 1).sum()}/{len(d)} cases; median N {n.median():.0f}, "
+              f"max {n.max()}; largest 2nd component {d[f'second_conn{name}'].max()} vox; "
+              f"volume outside the main component: median {frac.median():.4%}, max {frac.max():.4%}")
 
 
 if __name__ == "__main__":

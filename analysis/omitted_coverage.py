@@ -1,43 +1,37 @@
 #!/usr/bin/env python3
-"""Couverture des régions omises par les prédictions (prémisse du mécanisme, critique R3).
+"""How much of the omitted regions do the predictions cover? (premise of the mechanism)
 
-Le mécanisme proposé pour le renversement sous omission : M0 (entraîné sur GT*) prédit
-des structures fines que la référence GT- (omission) ne contient plus. Deux mesures
-directes, sans ré-inférence :
+Proposed mechanism for the reversal under omission: M0 (trained on GT*) predicts thin
+structures that the omission reference GT- no longer contains. Two direct measures, with
+no new inference:
 
-  (1) COUVERTURE : pour chaque composante omise (composante connexe 26-voisins de
-      Z = GT* \\ GT-), la part de ses voxels recouverts par la prédiction de chaque modèle,
-      agrégée en volume (pondérée par voxels) et par cas. Test : M0 en couvre-t-il plus ?
-  (2) CONTRÔLE NÉGATIF (faisabilité) : combien de composantes omises ne sont prédites par
-      AUCUN des trois modèles (à d voxels près) ? Un contrôle « omettre ce qu'aucun modèle
-      ne prédit » n'a de sens que s'il en reste de taille non négligeable.
+  (1) COVERAGE: for each omitted component (26-connected component of Z = GT* minus GT-),
+      the fraction of its voxels covered by each model's prediction, aggregated by volume
+      (voxel-weighted) and per case. Does M0 cover more than M1 and M2?
+  (2) NEGATIVE-CONTROL FEASIBILITY: how many omitted components are predicted by NONE of
+      the three models (within d voxels)? A control that "omits what no model predicts"
+      only makes sense if such components are not negligible in size.
 
-Résultats (voir results/omitted_coverage_summary.csv) : le contrôle négatif est
-inexploitable (les composantes non prédites sont quasi toutes < 10 voxels) ; la couverture
-de M0 dépasse celle de M1/M2 d'environ 11 points dans chaque cas.
+Findings (results/omitted_coverage_summary.csv): the negative control is not feasible
+(unpredicted components are almost all < 10 voxels); M0 covers about 11 points more of the
+omitted volume than M1/M2 in every case.
 
-Sorties : results/omitted_coverage_components.csv (composantes, recouvrement strict),
-          results/omitted_coverage_summary.csv (strates de taille x dilatation),
-          results/omitted_coverage_per_case.csv (couverture volumique par cas et modèle).
+Outputs: results/omitted_coverage_components.csv (components, strict overlap),
+         results/omitted_coverage_summary.csv (size bins x dilation),
+         results/omitted_coverage_per_case.csv (volume coverage per case and model).
 
-Usage
------
     python analysis/omitted_coverage.py --workers 4
 """
 
 from __future__ import annotations
 
 import argparse
-import glob
-import os
-import sys
 from multiprocessing import Pool
 
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fold_map import case_fold_map  # noqa: E402
+from prgt.folds import case_fold_map
 
 RAW = "nnUNet_data/nnUNet_raw/Dataset100_PARSE"
 RES = "nnUNet_data/nnUNet_results/Dataset100_PARSE"
@@ -91,7 +85,7 @@ def main():
         parts = [d for res in pool.map(_case, tasks, chunksize=1) for d in res]
     df = pd.concat(parts, ignore_index=True)
 
-    # composantes, recouvrement strict (d=0)
+    # components, strict overlap (d = 0)
     keep = ["case", "comp", "vox"] + [f"cover_{m}_d0" for m in TRAINERS] + ["none_d0"]
     df[keep].to_csv("results/omitted_coverage_components.csv", index=False)
 
@@ -109,7 +103,7 @@ def main():
     summ = pd.DataFrame(rows)
     summ.to_csv("results/omitted_coverage_summary.csv", index=False)
 
-    # couverture volumique par cas (d=0) et différence M0 - Mk
+    # volume coverage per case (d = 0) and the M0 - Mk difference
     for m in TRAINERS:
         df[f"v_{m}"] = df[f"cover_{m}_d0"] * df.vox
     per = df.groupby("case")[["vox"] + [f"v_{m}" for m in TRAINERS]].sum()
@@ -121,7 +115,7 @@ def main():
     print(summ.round(3).to_string(index=False))
     for m in ("M1", "M2"):
         d = per.cov_M0 - per[f"cov_{m}"]
-        print(f"couverture M0 - {m}: moyenne {d.mean():+.4f}, M0 > {m} dans {(d > 0).sum()}/{len(d)} cas")
+        print(f"coverage M0 - {m}: mean {d.mean():+.4f}, M0 > {m} in {(d > 0).sum()}/{len(d)} cases")
 
 
 if __name__ == "__main__":

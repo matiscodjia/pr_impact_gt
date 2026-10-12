@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
-"""Vérification directe du mécanisme du retournement HD95 (demandée après relecture).
+"""Direct check of the mechanism behind the HD95 reversal.
 
-Thèse à vérifier : sous `omission`, la référence perd des branches distales ; M0
-(propre) les prédit quand même, elles deviennent des faux positifs éloignés, et HD95
-explose proportionnellement à ce qui a été omis. Si le mécanisme est réel, le volume
-omis dans la référence (par cas) doit être corrélé à la pénalité HD95 de M0
-(hd95(M0,omission)-hd95(M0,star)) -- pas seulement en moyenne, cas par cas.
+Claim: under the omission reference, distal branches are missing from GT-; M0 (trained
+on clean labels) still predicts them, they become distant false positives, and HD95 grows
+with what was omitted. If the mechanism is real, the volume omitted from the reference
+(per case) must correlate with the HD95 penalty of M0, hd95(M0, omission) - hd95(M0, star),
+case by case and not only on average.
 
-Sources : `results/reference_severity.csv` (dV_ref_vs_star, scenario=GT_minus_omission,
-déjà signé négatif car omission ne fait que retirer du volume) et `results/metrics.csv`
-(hd95 de M0 sous star et omission). Aucun nouveau calcul sur les masques -- pur
-recoupement de tables déjà produites, CPU trivial.
+Sources: results/reference_severity.csv (dV_ref_vs_star for GT_minus_omission, negative
+because omission only removes volume) and results/metrics.csv (HD95 of M0 under GT* and
+GT-). No mask is read: this only joins tables that already exist.
 
-Sortie : results/mechanism_correlation.csv (une ligne : les deux coefficients + IC
-bootstrap), et un nuage de points sauvegardé pour inspection visuelle si demandé.
+Output : results/mechanism_correlation.csv (one row: Pearson and Spearman coefficients
+with bootstrap 95 % intervals).
 
-Usage
------
     python analysis/mechanism_correlation.py --results_dir results --seed 42
 """
 
@@ -24,18 +21,14 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
-
-import results_store as rs  # noqa: E402
-from rank_reversal import build_wide, load_pooled  # noqa: E402
+from prgt import results_store as rs
+from rank_reversal import build_wide, load_pooled
 
 
 def _bootstrap_ci_corr(x, y, func, n_boot=10000, seed=42):
@@ -48,7 +41,7 @@ def _bootstrap_ci_corr(x, y, func, n_boot=10000, seed=42):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Corrélation volume omis / pénalité HD95 de M0")
+    ap = argparse.ArgumentParser(description="Correlation between omitted volume and the HD95 penalty of M0")
     ap.add_argument("--results_dir", default="results")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--n_boot", type=int, default=10000)
@@ -56,7 +49,7 @@ def main():
 
     sev_path = os.path.join(args.results_dir, "reference_severity.csv")
     if not os.path.exists(sev_path):
-        raise SystemExit(f"[FATAL] {sev_path} absent -- lancer reference_severity.py (P0.3) d'abord.")
+        raise SystemExit(f"[FATAL] {sev_path} missing: run analysis/reference_severity.py first.")
     sev = pd.read_csv(sev_path)
     sev_om = sev[sev["scenario"] == "GT_minus_omission"].set_index("case")
 
@@ -68,8 +61,8 @@ def main():
 
     common = penalty.index.intersection(sev_om.index)
     penalty = penalty.loc[common]
-    # dV_ref_vs_star est négatif sous omission (volume retiré) -- on prend la magnitude
-    # ("volume omis", une fraction positive du volume star) pour une lecture directe.
+    # dV_ref_vs_star is negative under omission (removed volume); use its magnitude, the
+    # omitted fraction of the clean volume.
     vol_omitted = (-sev_om.loc[common, "dV_ref_vs_star"]).values
     hd95_penalty = penalty.values
 
@@ -81,8 +74,8 @@ def main():
                                 lambda a, b: spearmanr(a, b), args.n_boot, args.seed)
 
     print(f"n={len(common)}")
-    print(f"Pearson r  = {r_pearson:+.3f}  (IC95%=[{r_ci[0]:+.3f},{r_ci[1]:+.3f}])  p={p_pearson:.3g}")
-    print(f"Spearman ρ = {rho_spearman:+.3f}  (IC95%=[{rho_ci[0]:+.3f},{rho_ci[1]:+.3f}])  p={p_spearman:.3g}")
+    print(f"Pearson r    = {r_pearson:+.3f}  (95% CI=[{r_ci[0]:+.3f},{r_ci[1]:+.3f}])  p={p_pearson:.3g}")
+    print(f"Spearman rho = {rho_spearman:+.3f}  (95% CI=[{rho_ci[0]:+.3f},{rho_ci[1]:+.3f}])  p={p_spearman:.3g}")
 
     row = {
         "n": len(common), "pearson_r": r_pearson, "pearson_ci_low": r_ci[0],

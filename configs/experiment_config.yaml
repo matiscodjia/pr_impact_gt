@@ -1,93 +1,79 @@
 # ============================================================================
-# experiment_config.yaml — Configuration centralisée des expériences
+# experiment_config.yaml -- configuration of the study
+#
+# Read by pipeline/orchestrator.py, pipeline/collect_metrics.py, the nnU-Net trainers
+# (nnunet_trainers/, from the repository root) and the cluster config generators.
 # ============================================================================
 
-# ── Dataset source ──
+# Source dataset (clean reference GT*)
 dataset:
   id: 100
   name: "Dataset100_PARSE"
-  raw_dir: "./data"
-  splits:
-    train: 0.70
-    val: 0.15
-    test: 0.15
-  seed: 42
 
-# ── nnU-Net training ──
+# nnU-Net training
 training:
   configurations: ["3d_fullres"]
   folds: [0, 1, 2, 3, 4]
-  # Schedule à 500 epochs : point de convergence identifié dans une recherche
-  # antérieure sur ce type de données (artères pulmonaires). Lu par tous les trainers
-  # (nnUNetTrainerStd, nnUNetTrainerDegraded et dérivés). Re-vérifiable via calibrate.py.
+  # 500 epochs: convergence point found in earlier work on pulmonary arteries. Read by
+  # every trainer (nnUNetTrainerStd, nnUNetTrainerDegraded and subclasses). Can be
+  # re-checked with pipeline/calibrate_epochs.py.
   num_epochs: 500
 
-# ── Matrice expérimentale (consommée par orchestrator.py) ──
-# Un modèle = (trainer nnU-Net, dataset source). tier = priorité d'exécution
-# (A traité avant B avant C). L'orchestrateur entrelace les folds au sein d'un tier
-# pour obtenir un résultat comparatif complet au plus tôt, puis l'affiner.
+# Models (read by pipeline/orchestrator.py)
+# A model = (nnU-Net trainer, source dataset). tier = execution priority (A before B).
+# Within a tier the orchestrator interleaves the folds, so that a complete comparison
+# exists as early as possible and is then refined.
 experiment:
   models:
-    # Baseline propre — sert Q1, Q2, Q3
+    # Clean baseline (Q1, Q2, Q3)
     - name: M0_Star
       trainer: nnUNetTrainerStd
       dataset_id: 100
       tier: A
-    # Q1/Q2 — bruit topologique biaisé (omission), on-the-fly
+    # Q1/Q2: biased topological noise (omission), on the fly
     - name: M1_Omission
       trainer: nnUNetTrainerDegradedOmissionOnly
       dataset_id: 100
       tier: A
-    # Q2 — bruit de bord NON biaisé (drift μ=0), on-the-fly = augmentation
+    # Q2: UNBIASED boundary noise (drift mu = 0), on the fly = augmentation
     - name: M2_Drift_mu0
       trainer: nnUNetTrainerDriftMu0
       dataset_id: 100
       tier: A
-    # Q3 — biais de bord appris (drift μ<0), dataset FIGÉ (cohorte cohérente)
+    # Q3: learned boundary bias (drift mu < 0), FROZEN training labels (Dataset103)
     - name: M3_Drift_muMinus
       trainer: nnUNetTrainerStd
       dataset_id: 103
       tier: B
-    # Q3 — biais de bord appris (drift μ>0), dataset FIGÉ
+    # Q3: learned boundary bias (drift mu > 0), FROZEN training labels (Dataset104)
     - name: M4_Drift_muPlus
       trainer: nnUNetTrainerStd
       dataset_id: 104
       tier: B
 
-# ── Dégradations formelles — familles θ = (family, r, p) ─────────────────────
+# Noise operator N(GT*; theta), theta = (family, r, p[, mu]) -- see prgt/noise.py.
 #
-# 4 familles issues de l'étude metric_reliability_study :
-#   distal_omission   : ouverture morpho (boule r) + Bernoulli par composante fine
-#   boundary_jitter   : déplacement surface ±r vx, champ lissé (fraction p affectée)
-#   distal_truncation : élagage tronçons terminaux squelette, Bernoulli par tronçon
-#   homogeneous_morpho: CONTRÔLE irréaliste — érosion uniforme, fraction p affectée
+# Every image is ALWAYS degraded: p is a SEVERITY (fraction or proportion affected), never
+# the probability of degrading an image. distal_omission and distal_truncation remove at
+# least one structure whenever thin structures exist; boundary_drift and
+# homogeneous_morpho always affect a fraction p of the surface when p > 0.
 #
-# POLITIQUE D'APPLICATION : 100 % des images du dataset sont TOUJOURS dégradées.
-#   • p est un paramètre de SÉVÉRITÉ (fraction/proportion affectée), PAS une
-#     probabilité d'appliquer la dégradation à l'image.
-#   • Pour distal_omission et distal_truncation (Bernoulli par composante) :
-#     garantie code → si fine structures existent, au moins une est toujours retirée.
-#   • Pour boundary_jitter et homogeneous_morpho (coverage gate) : p fraction de
-#     surface toujours affectée dès que p > 0.
-#
-# Points d'opération MESURÉS sur PARSE (labelsTr, n=5-8 cas) pour viser
-# clDice(GT⁻, GT*) ∈ [0.85, 0.90] (fenêtre inter-observateur) :
-#
-# Points d'opération MESURÉS sur PARSE (cf. scripts/calibrate_noise.py, experiments_plan.md) :
-#   distal_omission   r2 p0.3 → clDice 0.878 ∈ [0.85,0.90]   (axe topologique, biaisé)
-#   boundary_drift    r1 p0.5 → NSD@0.5 0.88 ∈ [0.85,0.90]   (axe surface ; μ règle le biais)
-#   distal_truncation : ÉCARTÉ — redondant avec distal_omission (même axe : réduction
-#                       biaisée du foreground distal). clDice était le mauvais instrument
-#                       pour le juger (squelette aveugle au limage de bord).
-# Politique d'application : 100 % des images, toujours. p = sévérité, jamais un taux.
+# Operating points MEASURED on PARSE (pipeline/calibrate_noise.py, then on all 85 cases
+# with analysis/calibration_85.py), aiming at the inter-observer window [0.85, 0.90]:
+#   distal_omission  r2 p0.3 -> clDice 0.878   (topological axis, biased)
+#   boundary_drift   r1 p0.5 -> NSD@0.5 0.88   (surface axis; mu sets the bias)
+#   distal_truncation: set aside -- redundant with distal_omission (same axis: biased
+#                      reduction of the distal foreground).
 
-# ── Datasets dégradés FIGÉS (Q3 : biais cohérent par cas = une cohorte d'annotateurs) ──
-# Une seule réalisation par cas (seed fixe) → cible stable que le modèle peut apprendre.
+# FROZEN degraded training sets (Q3: one consistent bias per case, like one annotator
+# cohort). One realisation per case (fixed seed), so the target is stable and learnable.
+# cluster/prepare_q3.sh builds them by copying the evaluation references GT- (same seeds);
+# pipeline/make_fixed_training_sets.py rebuilds them from this block.
 fixed_datasets:
   103:
     name: "Dataset103_PARSE_DriftMuMinus"
     degradations:
-      # Biais de bord SOUS-segmentant (μ<0) — réaliste, cohérent sur tout le dataset
+      # under-segmenting boundary bias (mu < 0)
       - family: boundary_drift
         r: 1
         p: 0.5
@@ -95,95 +81,58 @@ fixed_datasets:
   104:
     name: "Dataset104_PARSE_DriftMuPlus"
     degradations:
-      # Biais de bord SUR-segmentant (μ>0)
+      # over-segmenting boundary bias (mu > 0)
       - family: boundary_drift
         r: 1
         p: 0.5
         mu: 0.5
 
-# ── Dégradation stochastique on-the-fly (fallback nnUNetTrainerDegraded générique) ──
-# Les modèles du plan utilisent des trainers dédiés (OmissionOnly, DriftMu0). Ceci n'est
-# que le défaut si on lance le trainer générique. Une seule famille (pas de bruit composé).
+# On-the-fly noise of the generic nnUNetTrainerDegraded (fallback only: the models above
+# use dedicated trainers). One family, no compound noise.
 stochastic_degradations:
   - family: distal_omission
     r: 2
     p: 0.3
 
-# ── Calibration du schedule (choix de num_epochs) ──
-# Un run long UNIQUE sur 1 fold, avec snapshots de checkpoints aux jalons.
-# Chaque snapshot est évalué en out-of-fold sur clDice + Betti0 (TOPOLOGIE, qui
-# converge plus tard que le Dice de région) → courbe + recommandation.
-# cf. scripts/calibrate.py et orchestrator.py --calibrate.
+# Schedule calibration (choice of num_epochs): ONE long run on one fold with checkpoint
+# snapshots at the milestones; each snapshot is scored out of fold on clDice and Betti-0
+# (topology converges later than the region Dice). See pipeline/orchestrator.py --calibrate
+# and pipeline/calibrate_epochs.py.
 calibration:
-  budget: 1000                                  # epochs du run de calibration (généreux)
+  budget: 1000                                  # epochs of the calibration run
   milestones: [200, 300, 400, 500, 600, 800, 1000]
-  trainer: nnUNetTrainerCalib                   # ...Degraded pour calibrer Minus_Stoch
+  trainer: nnUNetTrainerCalib                   # nnUNetTrainerCalibDegraded for a noisy model
   dataset_id: 100
   fold: 0
-  plateau_tol: 0.01                             # plateau = clDice ≥ (1-tol)·max
-  # Calibration du bruit : plage de (r, p) à balayer pour atteindre [0.85, 0.90]
-  noise_calibration:
-    families: [distal_omission, boundary_jitter, distal_truncation, homogeneous_morpho]
-    r_values: [1, 2, 3, 4, 5]
-    p_values: [0.1, 0.2, 0.3, 0.5, 0.7, 1.0]
-    family_r_limits:
-      boundary_jitter: [1, 2, 3]   # r>3 sort de la fenêtre inter-observateur sur PARSE
-    target_cldice: [0.85, 0.90]    # fenêtre inter-observateur à viser
-    n_seeds: 5
+  plateau_tol: 0.01                             # plateau = clDice >= (1 - tol) * max
 
-# ── Grid search ──
-# Politique : chaque point (family, r, p) est un trainer on-the-fly qui dégrade
-# 100 % des batches d'entraînement. p est la SÉVÉRITÉ, pas le taux d'application.
-# Phase 1 = distal_omission seule (r × p), Phase 2 = boundary_jitter seule,
-# Phase 3 = meilleures combinaisons des deux.
-grid_search:
-  families: [distal_omission, boundary_jitter]
-  r_values: [1, 2, 3]
-  p_values: [0.3, 0.5, 0.8, 1.0]   # sévérité croissante ; 1.0 = retrait/couverture total
-  top_n_combos: 3
-  # Comparaison relative (un seul fold) → schedule plus court que les modèles principaux.
-  num_epochs: 150
-  fold: 0
-
-# ── Évaluation ──
-# Un bruit par scénario (pas de bruit composé). Métrique appariée :
-#   omission → clDice/Betti0 ; drift → NSD@0.5 + volume_delta (ΔV signé, directionnel).
+# Evaluation references (read by pipeline/make_eval_references.py and collect_metrics.py).
+# One noise per scenario (no compound noise). Matched metric:
+#   omission -> clDice / Betti-0; drift -> NSD@0.5 + volume_delta (signed, directional).
 evaluation:
-  metrics: ["CLDice", "HD95", "NSD", "Betti0", "VolumeDelta"]
   scenarios:
     - name: "GT_star"
-      description: "Référence propre (GT*)."
+      description: "Clean reference (GT*)."
       degradation: null
     - name: "GT_minus_omission"
       description: >
-        GT⁻ topologique (distal_omission r2 p0.3 → clDice 0.878). Q1 : pénalise-t-elle
-        un modèle entraîné propre ? Métrique appariée clDice/Betti0.
+        Topological GT- (distal_omission r2 p0.3 -> clDice 0.878). Q1: does it penalise a
+        model trained on clean labels? Matched metric clDice / Betti-0.
       degradation:
         - family: distal_omission
           r: 2
           p: 0.3
     - name: "GT_minus_drift_neg"
-      description: "GT⁻ biais de bord sous-segmentant (drift r1 p0.5 μ=−0.5). Q3 (μ<0)."
+      description: "GT- with an under-segmenting boundary bias (drift r1 p0.5 mu=-0.5). Q3 (mu<0)."
       degradation:
         - family: boundary_drift
           r: 1
           p: 0.5
           mu: -0.5
     - name: "GT_minus_drift_pos"
-      description: "GT⁻ biais de bord sur-segmentant (drift r1 p0.5 μ=+0.5). Q3 (μ>0)."
+      description: "GT- with an over-segmenting boundary bias (drift r1 p0.5 mu=+0.5). Q3 (mu>0)."
       degradation:
         - family: boundary_drift
           r: 1
           p: 0.5
           mu: 0.5
-
-# ── Hardware profiles ──
-hardware:
-  macos_mps:
-    vram_gb: 24
-    num_workers: 2
-    device: "mps"
-  a40:
-    vram_gb: 35
-    num_workers: 4
-    device: "cuda"

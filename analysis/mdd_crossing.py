@@ -1,37 +1,36 @@
 #!/usr/bin/env python3
-"""Règle MDD appliquée à TOUS les retournements rapportés (cohérence interne).
+"""Apply the minimum-detectable-difference (MDD) rule to EVERY reported reversal.
 
-Question (relecture simulée n°4) : pour écarter deux contrastes |ΔV| sous drift⁻, l'étude
-exige que l'écart APRÈS croisement dépasse la différence minimale détectable ; les
-retournements « précoces » de la grille de sévérité (p = 0,1-0,2) sont eux aussi des
-croisements minuscules. Même règle partout, sinon double standard.
+The study only accepts a sign crossing if the gap after the crossing exceeds the minimum
+detectable difference (this is how two |Delta V| contrasts under drift- are set aside).
+The "early" reversals of the severity grid (p = 0.1-0.2) are also tiny crossings, so the
+same rule must apply everywhere.
 
-Règle (identique à verify_reversal_robustness.py, check (0b)) :
-    MDD = (z_0.975 + z_0.80) · sd(ι) / sqrt(n)          (80 % de puissance, bilatéral 5 %)
-    croisement résolu  ⇔  signe(Δ_GT*) ≠ signe(Δ_GT⁻)  ET  |Δ_GT⁻| ≥ MDD
-    retournement strict ⇔ croisement résolu ET Wilcoxon(ι) p brut < 0,05
-avec Δ = moyenne par cas de m(M0) − m(Mk), ι = Δ_GT⁻ − Δ_GT* par cas.
+Rule (same as reversal_robustness.py, check (0b)):
+    MDD = (z_0.975 + z_0.80) * sd(iota) / sqrt(n)      (80 % power, two-sided 5 %)
+    resolved crossing <=> sign(Delta_GT*) != sign(Delta_GT-)  AND  |Delta_GT-| >= MDD
+    strict reversal   <=> resolved crossing AND raw Wilcoxon p(iota) < 0.05
+with Delta = mean over cases of m(M0) - m(Mk) and iota = Delta_GT- - Delta_GT* per case.
 
-Sources (métriques par cas déjà calculées, aucun recalcul d'image) :
+Sources (per-case metrics already computed, no image is read):
     grid        results/dose_response_fine_metrics.csv + dose_response_p05_metrics.csv
-    draws       results/dose_response_draw*_metrics.csv (p = 0,3)
+    draws       results/dose_response_draw*_metrics.csv (p = 0.3)
     structured  results/structured_omission_metrics.csv
     lcc         results/metrics_lcc.csv (postprocessing == lcc)
 
-p bruts : hors de la famille FDR des 126 tests de l'étude.
-Sortie : results/mdd_crossing.csv
+The raw p-values are outside the study's FDR family of 126 tests.
+Output : results/mdd_crossing.csv
+
+    python analysis/mdd_crossing.py
 """
 import glob
-import os
 import re
-import sys
 
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from stats_utils import wilcoxon_p_safe  # noqa: E402
+from prgt.stats import wilcoxon_p_safe
 
 Z = norm.ppf(0.975) + norm.ppf(0.80)
 OTHERS = ("M1_Omission", "M2_Drift_mu0")

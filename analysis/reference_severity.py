@@ -1,30 +1,22 @@
 #!/usr/bin/env python3
-"""P0.3 -- Sévérité de la référence dégradée, mesurée sur les 85 cas (pas 8).
+"""Severity of each degraded reference, measured on all 85 cases.
 
-Calcule, PAR CAS, l'accord référence-vérité pour chaque scénario dégradé :
-clDice, NSD@0.5, NSD@2, HD95, Betti0, DeltaV entre GT_minus_<scenario>(case) et
-GT_star(case). Purement CPU sur les masques déjà générés sur disque (aucune
-inférence, aucun GPU) -- réutilise à l'identique le calcul de métriques
-(``cross_evaluate.PredFeatures`` / ``evaluate_pair_cached``) et la politique de crop
-bbox (``collect_metrics_parallel._union_bbox``, validée à la précision machine en
-triage pré-P0) du pipeline principal.
+For every case and degraded scenario, the agreement between GT_minus_<scenario>(case) and
+GT_star(case): clDice, NSD@0.5, NSD@2, HD95, Betti-0 error and volume delta. CPU only, on
+the masks already on disk (no inference). Uses the same metric code
+(prgt.metrics.PredictionFeatures / score_prediction) and the same bounding-box crop
+(prgt.metrics.union_bbox) as the main pipeline.
 
-Convention de signe : GT_minus joue le rôle "pred", GT_star le rôle "gt" dans
-``evaluate_pair_cached`` (même convention que ``visualize_degradations.compute_cldice
-(degraded, original)`` et que la Table 5.1 du rapport, "clDice(GT-,GT*)"). Donc
-``volume_delta`` = (vol(GT_minus) - vol(GT_star)) / vol(GT_star).
+Sign convention: GT_minus plays the "prediction", GT_star the "reference" in
+score_prediction (as in clDice(GT-, GT*) in the paper), so
+volume_delta = (vol(GT_minus) - vol(GT_star)) / vol(GT_star).
 
-Sortie : results/reference_severity.csv, une ligne par (case, scenario) :
+Output : results/reference_severity.csv, one row per (case, scenario):
   case, scenario, cldice_ref_vs_star, nsd05_ref_vs_star, nsd_ref_vs_star,
   hd95_ref_vs_star, betti0_ref_vs_star, dV_ref_vs_star, git_commit, seed, timestamp
 
-Usage
------
-    # estimation de temps sur 3 cas avant de lancer le run complet
-    python analysis/reference_severity.py --limit 3
-
-    # run complet, parallèle (upsert idempotent : relançable sans recalcul)
-    python analysis/reference_severity.py --workers 4
+    python analysis/reference_severity.py --limit 3        # timing on 3 cases first
+    python analysis/reference_severity.py --workers 4      # full run (idempotent upsert)
 """
 
 from __future__ import annotations
@@ -33,7 +25,6 @@ import argparse
 import glob
 import multiprocessing as mp
 import os
-import sys
 import time
 from datetime import datetime, timezone
 
@@ -45,12 +36,8 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
-
-import results_store as rs  # noqa: E402
-from collect_metrics_parallel import _union_bbox  # noqa: E402
-from cross_evaluate import PredFeatures, evaluate_pair_cached  # noqa: E402
+from prgt import results_store as rs
+from prgt.metrics import PredictionFeatures, score_prediction, union_bbox
 
 SCENARIOS = ["GT_minus_omission", "GT_minus_drift_neg", "GT_minus_drift_pos"]
 OUT_CSV = "reference_severity.csv"
@@ -82,9 +69,9 @@ def _compute_one(args: tuple) -> dict | None:
     gt_star = np.asarray(star_nii.get_fdata()) > 0
     gt_minus = np.asarray(nib.load(minus_path).get_fdata()) > 0
 
-    bbox = _union_bbox([gt_star, gt_minus], margin=2)
-    pf = PredFeatures(gt_minus[bbox].astype(np.float32), spacing=spacing)
-    m = evaluate_pair_cached(pf, gt_star[bbox].astype(np.float32))
+    bbox = union_bbox([gt_star, gt_minus], margin=2)
+    pf = PredictionFeatures(gt_minus[bbox].astype(np.float32), spacing=spacing)
+    m = score_prediction(pf, gt_star[bbox].astype(np.float32))
 
     return {
         "case": case, "scenario": scenario,
@@ -128,23 +115,22 @@ def upsert(results_dir: str, rows: list[dict], seed: int) -> None:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="P0.3 -- Sévérité de la référence (85 cas)")
+    ap = argparse.ArgumentParser(description="Severity of the degraded references (85 cases)")
     ap.add_argument("--results_dir", default="results")
     ap.add_argument("--nnunet_data_root", default="nnUNet_data")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--limit", type=int, default=None,
-                    help="Limite le nombre de CAS (pas de tâches) -- pour l'estimation de temps.")
+                    help="limit the number of CASES (not tasks), for a timing estimate")
     args = ap.parse_args()
 
     dataset_dir = _dataset_dir(args.nnunet_data_root)
     tasks = build_tasks(dataset_dir, args.results_dir, args.limit)
     if not tasks:
-        print("[SKIP] rien à faire (déjà calculé, ou --limit trop restrictif).")
+        print("[SKIP] nothing to do (already computed, or --limit too small).")
         return
 
-    print(f"[START] {len(tasks)} tâches (case x scénario) à calculer, "
-          f"workers={args.workers}")
+    print(f"[START] {len(tasks)} (case x scenario) tasks, workers={args.workers}")
     t0 = time.time()
     rows = []
     if args.workers > 1:
@@ -155,7 +141,7 @@ def main():
                 if i % 20 == 0 or i == len(tasks):
                     dt = time.time() - t0
                     print(f"  [{i}/{len(tasks)}] {dt:.1f}s "
-                          f"({dt / i:.2f}s/tâche, ETA {dt / i * (len(tasks) - i):.0f}s)")
+                          f"({dt / i:.2f}s/task, ETA {dt / i * (len(tasks) - i):.0f}s)")
     else:
         for i, task in enumerate(tasks, 1):
             res = _compute_one(task)
@@ -164,14 +150,14 @@ def main():
             if i % 10 == 0 or i == len(tasks):
                 dt = time.time() - t0
                 print(f"  [{i}/{len(tasks)}] {dt:.1f}s "
-                      f"({dt / i:.2f}s/tâche, ETA {dt / i * (len(tasks) - i):.0f}s)")
+                      f"({dt / i:.2f}s/task, ETA {dt / i * (len(tasks) - i):.0f}s)")
 
     if rows:
         upsert(args.results_dir, rows, args.seed)
     dt = time.time() - t0
-    print(f"[OK] {len(rows)}/{len(tasks)} lignes écrites dans "
-          f"{os.path.join(args.results_dir, OUT_CSV)} en {dt:.1f}s "
-          f"({dt / max(len(tasks), 1):.2f}s/tâche en moyenne)")
+    print(f"[OK] {len(rows)}/{len(tasks)} rows written to "
+          f"{os.path.join(args.results_dir, OUT_CSV)} in {dt:.1f}s "
+          f"({dt / max(len(tasks), 1):.2f}s/task on average)")
 
 
 if __name__ == "__main__":
