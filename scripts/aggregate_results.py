@@ -28,7 +28,7 @@ COLORS = {
 }
 _SCEN_ORDER = ["GT_star", "GT_minus_omission", "GT_minus_drift_neg", "GT_minus_drift_pos"]
 _KEY_METRICS = [("cldice", "clDice ↑"), ("betti0", "Betti₀ ↓"),
-                ("nsd05", "NSD@0.5mm ↑"), ("volume_delta", "ΔV signé")]
+                ("nsd05", "NSD@0.5mm ↑"), ("volume_delta", "ΔV (signed)")]
 
 
 def _finite(series: pd.Series) -> np.ndarray:
@@ -72,10 +72,12 @@ def plot_metric_boxplots(df, output_dir):
         ax.axis("off")
     handles = [Patch(facecolor=COLORS[m], label=m)
                for m in _MODEL_ORDER if m in set(df["model"])]
-    fig.legend(handles=handles, loc="upper center", ncol=len(handles) or 1,
-               frameon=False, fontsize=9)
-    fig.suptitle("Métriques par modèle × scénario (M0–M4)", y=1.0, fontweight="bold")
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    # BUGFIX (triage pré-P0, 2026-09-07) : suptitle et legend étaient tous deux ancrés
+    # près de y=1.0 et se chevauchaient visuellement. Deux ancres distinctes, empilées.
+    fig.suptitle("Per-metric distributions: model x scenario", y=1.08, fontweight="bold")
+    fig.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 1.02),
+               ncol=len(handles) or 1, frameon=False, fontsize=9)
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
     out = os.path.join(output_dir, "metrics_boxplots.png")
     fig.savefig(out, dpi=150, bbox_inches="tight"); plt.close(fig)
     print(f"  [figures] {out}")
@@ -110,16 +112,16 @@ def plot_question_summary(df, output_dir):
     _box_pairs(axes[0], df,
                [("M0_Star", "GT_star", "M0 | GT*"),
                 ("M0_Star", "GT_minus_omission", "M0 | GT⁻")],
-               "cldice", "Q1 — pénalité d'éval (omission)", "clDice ↑")
+               "cldice", "Q1 - eval penalty (omission)", "clDice ↑")
     _box_pairs(axes[1], df,
                [("M0_Star", "GT_star", "M0"),
                 ("M2_Drift_mu0", "GT_star", "M2 (μ=0)")],
-               "nsd05", "Q2 — robustesse sur GT* propre", "NSD@0.5 ↑")
+               "nsd05", "Q2 - robustness on clean GT*", "NSD@0.5 ↑")
     _box_pairs(axes[2], df,
                [("M0_Star", "GT_minus_drift_neg", "M0"),
                 ("M3_Drift_muMinus", "GT_minus_drift_neg", "M3 (μ<0)")],
-               "nsd05", "Q3 — colle au biais (GT⁻ biaisée)", "NSD@0.5 ↑")
-    fig.suptitle("Synthèse Q1/Q2/Q3 — métrique appariée", fontweight="bold")
+               "nsd05", "Q3 - fits the bias (biased GT-)", "NSD@0.5 ↑")
+    fig.suptitle("Per-question summary: matched metric", fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     out = os.path.join(output_dir, "questions_summary.png")
     fig.savefig(out, dpi=150, bbox_inches="tight"); plt.close(fig)

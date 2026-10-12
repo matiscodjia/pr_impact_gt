@@ -363,7 +363,13 @@ python scripts/visualize_degradations.py --mu -0.5            # boundary_drift b
 python scripts/visualize_degradations.py --no-3d             # 2D seulement (rapide)
 python scripts/visualize_degradations.py --ds-factor 3       # 3D plus léger
 python scripts/visualize_degradations.py --dpi 300           # haute résolution
+python scripts/visualize_degradations.py --light            # fond blanc (intégration PDF/article)
 ```
+
+> **Thème.** Par défaut le rendu est sur fond sombre (lecture écran). Ajouter `--light`
+> bascule en fond blanc avec textes sombres et gris « conservé » assombri — c'est la
+> variante utilisée pour les figures du rapport (`report/figures/`), qui s'intègre
+> proprement dans une page d'article.
 
 **Schéma du biais de dérive μ** (`boundary_drift`) — montre sous-segmentation ↔ jitter ↔
 sur-segmentation, avec l'accord inter-annotateur (clDice + NSD@0.5 mm) annoté sous chaque
@@ -374,7 +380,24 @@ python scripts/visualize_degradations.py --mu-sweep -1 -0.5 0 0.5 1 --r 2 --p 1.
 # → drift_mu_sweep_2d_<id>.png  et  drift_mu_sweep_3d_<id>.png
 ```
 
-Sortie : `result/figures/degradations/`. Le spacing du NIfTI est propagé au générateur
+**Reproduire à l'identique les figures du rapport** (thème clair, dpi 300, sur `PARSE_0001`,
+écrites dans `report/figures/`) :
+
+```bash
+PARSE=nnUNet_data/nnUNet_raw/Dataset100_PARSE/labelsTr/PARSE_0001.nii.gz
+
+# Fig. « signatures des familles » (2D + 3D)
+python scripts/visualize_degradations.py --input "$PARSE" \
+  --families distal_omission distal_truncation homogeneous_morpho boundary_drift \
+  --r 2 --p 0.5 --seed 0 --dpi 300 --light --output-dir report/figures
+
+# Fig. « axe de biais μ » (2D + 3D)
+python scripts/visualize_degradations.py --input "$PARSE" \
+  --mu-sweep -1 -0.5 0 0.5 1 --r 2 --p 1.0 --seed 0 --dpi 300 --light \
+  --output-dir report/figures
+```
+
+Sortie par défaut : `result/figures/degradations/`. Le spacing du NIfTI est propagé au générateur
 (familles mm-aware) et respecté dans l'aspect ratio. Note : `distal_truncation` lance
 `skeletonize` sur le volume plein (~1 min/cas) — restreindre avec `--families` ou `--no-3d`
 pour itérer vite.

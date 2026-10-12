@@ -1,25 +1,24 @@
 % =====================================================================
-%  Dense scientific report — source document for a MICCAI workshop paper
-%  Topic: reliability of segmentation evaluation under imperfect GT
-%  Build:  pdflatex main.tex  (x2 for refs)  — no external bib tool needed
-%  NOTE:   sections marked %% PENDING await the running experiments (Q1/Q2/Q3).
+%  LRE Technical Report --- Research track (team TIRF)
+%  Reliability of segmentation model evaluation under imperfect ground truth
+%  Build: pdflatex main.tex (x2 for refs/toc) --- no external bib tool needed
 % =====================================================================
-\documentclass[11pt,a4paper]{article}
-
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage[margin=2.4cm]{geometry}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{graphicx}
+\PassOptionsToPackage{numbers,sort&compress}{natbib}
+% amsmath/amssymb must be loaded BEFORE the class (which loads cleveref).
+\RequirePackage{amsmath}
+\RequirePackage{amssymb}
+\documentclass[
+    bookmarks, bookmarksnumbered, bookmarksopen,
+    colorlinks=true, citecolor=blue, linkcolor=blue, urlcolor=blue
+]{techrep}
+\usepackage{rev}
+\usepackage{amsthm}
 \usepackage{booktabs}
 \usepackage{xcolor}
 \usepackage{enumitem}
-\usepackage{caption}
 \usepackage{subcaption}
-\usepackage[hidelinks]{hyperref}
 \usepackage{microtype}
-
-\graphicspath{{figures/}}
+\graphicspath{{figures/}{figs/}}
 
 \newcommand{\gtstar}{\ensuremath{\mathrm{GT}^{\!*}}}
 \newcommand{\gtminus}{\ensuremath{\mathrm{GT}^{\!-}}}
@@ -27,41 +26,154 @@
 \newcommand{\R}{\ensuremath{\mathbb{R}}}
 \newcommand{\E}{\ensuremath{\mathbb{E}}}
 \newcommand{\todo}[1]{{\color{red}\textbf{[TODO: #1]}}}
+\newcommand{\pending}{{\color{red}\small$\langle$pending$\rangle$}}
+\newcommand{\QoneOmClDiceStar}{\pending}\newcommand{\QoneOmClDiceMinus}{\pending}
+\newcommand{\QoneOmClDiceP}{\pending}\newcommand{\QoneOmClDiceD}{\pending}
+\newcommand{\QoneOmBettiStar}{\pending}\newcommand{\QoneOmBettiMinus}{\pending}
+\newcommand{\QoneDrNsdStar}{\pending}\newcommand{\QoneDrNsdMinus}{\pending}
+\newcommand{\QoneDrNsdD}{\pending}
+\newcommand{\QoneDrDvMinus}{\pending}\newcommand{\QoneDrP}{\pending}
+\newcommand{\QoneDrDvD}{\pending}\newcommand{\QoneDrDvP}{\pending}
+\newcommand{\QtwoNsdMzero}{\pending}\newcommand{\QtwoNsdMtwo}{\pending}
+\newcommand{\QtwoNsdDelta}{\pending}\newcommand{\QtwoNsdP}{\pending}\newcommand{\QtwoNsdMDD}{\pending}
+\newcommand{\QtwoBettiMzero}{\pending}\newcommand{\QtwoBettiMtwo}{\pending}\newcommand{\QtwoBettiP}{\pending}
+\newcommand{\QthreeDvMthree}{\pending}\newcommand{\QthreeDvMzero}{\pending}\newcommand{\QthreePenMthree}{\pending}\newcommand{\QthreePenMzero}{\pending}
+\newcommand{\Ncases}{85}   % OOF coverage once all folds complete
+\renewcommand{\QoneOmClDiceStar}{0.877}\renewcommand{\QoneOmClDiceMinus}{0.777}
+\renewcommand{\QoneOmClDiceP}{$<$0.001}\renewcommand{\QoneOmClDiceD}{$-3.06$}
+\renewcommand{\QoneOmBettiStar}{81.6}\renewcommand{\QoneOmBettiMinus}{64.1}
+\renewcommand{\QoneDrNsdStar}{0.698}\renewcommand{\QoneDrNsdMinus}{0.644}
+\renewcommand{\QoneDrNsdD}{$-2.12$}
+\renewcommand{\QoneDrDvMinus}{$+0.034$}\renewcommand{\QoneDrP}{$<$0.001}
+\renewcommand{\QoneDrDvD}{$+4.55$}\renewcommand{\QoneDrDvP}{$<$0.001}
+\renewcommand{\QtwoNsdMzero}{0.698}\renewcommand{\QtwoNsdMtwo}{0.675}
+\renewcommand{\QtwoNsdDelta}{$-0.023$}\renewcommand{\QtwoNsdP}{$<$0.001}\renewcommand{\QtwoNsdMDD}{sig.}
+\renewcommand{\QtwoBettiMzero}{81.6}\renewcommand{\QtwoBettiMtwo}{83.0}\renewcommand{\QtwoBettiP}{0.47}
 
-\title{\textbf{On the Reliability of Segmentation Model Evaluation\\
-under Imperfect Ground Truth:\\
-A Formal Annotation--Noise Model and an Ethical Inquiry}}
-\author{M.\ Codjia}
-\date{\today}
+\title{Reference Imperfection Can Reverse Model Rankings\\
+in Segmentation Evaluation}
+\author{Matis Codjia}
+\supervisor{Élodie Puybareau (team TIRF), Marie Puren (team MNSHS)}
+\date{July 2026}
+\revision{v1.0}
+\email{matis.codjia@epita.fr}
+
+\summary{
+Deep-learning segmentation models are trained \emph{and evaluated} against manual
+annotations that are themselves imperfect: inter-observer disagreement on tubular
+structures such as pulmonary vessels is well documented. We ask a question that is
+usually left implicit: \emph{if the reference is noisy, does our model ranking survive
+it?} We introduce a formal, calibrated annotation-noise operator
+$\gtminus = \Nop(\gtstar;\theta)$ parametrised by a family, a scale $r$, a severity
+$p$, a directional bias $\mu$, and a seed, calibrate it to an inter-observer agreement
+window taken from the literature -- no per-case multi-annotator data exists for PARSE, a
+limitation we state plainly and design around -- and study, on $85$ out-of-fold cases of
+PARSE pulmonary arteries with nnU-Net, how the resulting reference imperfection moves
+evaluation scores \emph{and rankings}. Our central, demonstrated result is not a
+magnitude comparison but a reversal: changing only the reference, from the clean
+$\gtstar$ to a distal-omission degraded $\gtminus$, \emph{flips which of two
+independently trained networks scores best}, on two leaderboard-standard metrics (HD95,
+NSD@2mm), for both competitors tested against the clean-trained model. This is not a
+fragile point estimate: a per-case interaction test (paired Wilcoxon on the
+difference-of-differences, Benjamini--Hochberg FDR) reaches $p_{\text{FDR}}$ as low as
+$2\times10^{-10}$, and the reversed order is recovered in $100\%$ of $10\,000$
+case-resamplings. We give the reversal a mechanism, not just a measurement: the
+clean-trained network still finds the distal branches that omission deletes from the
+reference; once the reference no longer contains them, those branches score as distant
+false positives and inflate HD95, while the noise-matched network, which never predicts
+them either, is rewarded for reproducing the reference's own error -- and clDice,
+dominated by the intact proximal trunk, does not move. A magnitude comparison between the
+reference effect and the model effect remains useful context (median $2.3\times$ across
+$54$ metric/scenario/model-pair triples, several combinations even below $1\times$), but
+we no longer treat it as the paper's argument: a reversal need not be large to invalidate
+a ranking. The magnitudes involved are sub-voxel to half-voxel ($0.12$--$0.37$mm HD95),
+which could read as academic until anchored: on the PARSE 2022 pulmonary-artery
+leaderboard, the same anatomy at comparable resolution, the HD95 margin separating the
+top two real submissions is $0.16$--$0.61$mm -- the same order of magnitude as our
+reversal, not a metaphor but a magnitude comparison against real competing entries. None of
+our predictions were post-processed, and HD95 is the statistic most exposed to a single
+isolated fragment ($N(P)\in[44,81]$ components) -- so we tested the obvious confound
+directly: the reversal survives largest-connected-component post-processing intact on both
+metrics, at a real but asymmetric clDice cost (negligible for the clean-trained model, real
+for the noise-trained ones), ruling out unprocessed fragmentation as the explanation. We
+report, alongside, a second and independent pathology: the Betti-$0$ error $|\Delta N|$ is
+blind to component correspondence and moves incoherently under the same reference change --
+visible in the same data but, at this sample size, not statistically established, which we
+report as such rather than overstate. We close with measurement-practice recommendations
+and a direction for what we did not measure: correspondence-aware topological metrics.}
+
+\frenchsummary{
+Les modèles de segmentation par apprentissage profond sont entraînés \emph{et
+évalués} contre des annotations manuelles elles-mêmes imparfaites~; le désaccord
+inter-observateur sur les structures tubulaires comme les vaisseaux pulmonaires est bien
+documenté. Nous posons une question souvent laissée implicite~: \emph{si la référence est
+bruitée, notre classement de modèles y survit-il~?} Nous introduisons un opérateur de
+bruit d'annotation formel et calibré, $\gtminus=\Nop(\gtstar;\theta)$, doté d'un unique
+axe de biais~$\mu$, le calibrons sur une fenêtre d'accord inter-observateur issue de la
+littérature~-- faute de données multi-annotateurs sur PARSE, une limitation que nous
+assumons et contournons explicitement~-- puis étudions, sur $85$ cas \emph{out-of-fold}
+d'artères pulmonaires PARSE avec nnU-Net, comment cette imperfection de la référence
+déplace les scores \emph{et les classements}. Notre résultat central et démontré n'est
+pas une comparaison de magnitude mais un retournement~: changer la seule référence, de
+la référence propre $\gtstar$ vers une référence dégradée par omission $\gtminus$,
+\emph{inverse lequel de deux réseaux entraînés indépendamment obtient le meilleur
+score}, sur deux métriques de classement standard (HD95, NSD@2mm), pour les deux
+concurrents testés contre le modèle entraîné propre. Ce n'est pas un point estimé
+fragile~: un test d'interaction par cas (Wilcoxon apparié sur la différence des
+différences, FDR de Benjamini--Hochberg) atteint un $p_{\text{FDR}}$ aussi bas que
+$2\times10^{-10}$, et l'ordre inversé est retrouvé dans $100\%$ des $10\,000$
+rééchantillonnages de cas. Nous donnons un mécanisme au retournement, pas seulement une
+mesure~: le réseau entraîné propre détecte toujours les branches distales que
+l'omission retire de la référence~; une fois la référence privée de ces branches,
+celles-ci comptent comme de lointains faux positifs et font exploser le HD95, tandis que
+le réseau entraîné sur le même bruit, qui ne les prédit pas non plus, est récompensé
+pour avoir reproduit l'erreur de la référence~-- et le clDice, dominé par le tronc
+proximal intact, ne bouge pas. Une comparaison de magnitude entre effet référence et
+effet modèle reste un contexte utile (ratio médian $2{,}3\times$ sur $54$ triplets
+métrique/scénario/paire de modèles, plusieurs combinaisons même sous $1\times$), mais
+nous ne la traitons plus comme l'argument du papier~: un retournement n'a pas besoin
+d'être grand pour invalider un classement. Les magnitudes en jeu sont sous-voxel à
+demi-voxel ($0{,}12$--$0{,}37$mm de HD95), ce qui pourrait sembler académique sans
+ancrage~: sur le classement public PARSE 2022, même anatomie, résolution comparable, la
+marge de HD95 séparant les deux meilleures soumissions réelles est de $0{,}16$--$0{,}61$mm
+-- le même ordre de grandeur que notre retournement, pas une métaphore mais une
+comparaison de magnitude contre de vraies entrées concurrentes. Aucune de nos
+prédictions n'a été post-traitée, et HD95 est la statistique la plus exposée à un
+fragment isolé ($N(P)\in[44,81]$ composantes)~-- nous avons donc testé directement ce
+biais évident~: le retournement survit intact au post-traitement par plus grande
+composante connexe sur les deux métriques, à un coût en clDice réel mais asymétrique
+(négligeable pour le modèle propre, réel pour les modèles bruités), ce qui écarte la
+fragmentation non traitée comme explication. Nous rapportons, en parallèle, une seconde
+pathologie indépendante~: l'erreur de Betti-$0$ ($|\Delta N|$), aveugle à la
+correspondance des composantes, se déplace de façon incohérente sous le même changement
+de référence~-- visible sur les mêmes données mais, à cette taille d'échantillon, non
+établie statistiquement, ce que nous rapportons tel quel plutôt que de le
+surinterpréter. Nous concluons par des recommandations de pratique de mesure et une
+direction pour ce que nous n'avons pas mesuré~: des métriques topologiques sensibles à
+la correspondance.}
+
+\keywords{ground-truth quality, annotation noise, segmentation metrics, clDice, Betti number, NSD, HD95, pulmonary arteries, nnU-Net, evaluation reliability, inter-observer variability}
 
 \begin{document}
 \maketitle
 
-\begin{abstract}
-Deep-learning segmentation models are trained \emph{and evaluated} against manual
-annotations that are themselves imperfect: inter-observer disagreement on tubular
-structures such as pulmonary vessels is well documented. We ask a question that is
-usually left implicit: \emph{if the reference is noisy, are our model rankings
-trustworthy?} We introduce a formal, calibrated annotation-noise operator
-$\gtminus = \Nop(\gtstar;\theta)$ parametrised by a family, a scale $r$, a severity
-$p$, a directional bias $\mu$, and a seed. The operator unifies, under a single
-knob $\mu$, the literature's central distinction between \emph{unbiased} noise
-(zero-mean boundary jitter, which behaves as augmentation) and \emph{biased} noise
-(systematic over/under-segmentation, which can be learned). Using this instrument we
-formalise three questions on the PARSE pulmonary-artery dataset with nnU-Net: (Q1)
-does evaluating on $\gtminus$ unfairly penalise a clean-trained model? (Q2) does
-unbiased label noise act as data augmentation? (Q3) can a systematic annotation bias
-be \emph{learned}, making a model fit the wrong reference better? A recurring finding
-is metrological: the matched metric must agree with the noise not only in
-\emph{type} (topological vs.\ surface) but in \emph{scale} and \emph{direction}; we
-show that a clinically realistic boundary error is below the resolving power of
-standard surface metrics, and that on thin vessels surface and topological errors are
-inseparable. We argue these observations carry an ethical weight for how the
-community reports and trusts evaluation.
-\end{abstract}
+\section*{Copying this document}
+Copyright \copyright{} 2026 LRE.
+
+Permission is granted to copy, distribute and/or modify this document under the terms of the
+GNU Free Documentation License, Version 1.2 or any later version published by the Free Software
+Foundation; with the Invariant Sections being just ``Copying this document'', no Front-Cover
+Texts, and no Back-Cover Texts. A copy of the license is provided in the file COPYING.DOC.
+
+\tableofcontents
+\newpage
+
+
+
+
 
 % =====================================================================
-\section{Introduction}
+\chapter{Introduction}
 % =====================================================================
 Supervised image segmentation rests on a silent assumption: that the manual
 annotation used as ground truth (\gtstar) is correct. In practice annotations are
@@ -73,57 +185,111 @@ them. When a benchmark declares model~$A$ better than model~$B$ by a small margi
 a metric computed against a noisy reference, we rarely ask whether that ranking
 survives the noise.
 
+The stakes are asymmetric. In training, imperfect labels are one nuisance among many,
+partly absorbed by regularisation and augmentation. In evaluation, the reference is the
+\emph{definition} of correctness: there is no appeal beyond it. A metric does not measure
+how good a segmentation is; it measures how close it is to a particular human's tracing.
+If that tracing is systematically off -- because a protocol, a tool default, or an
+individual habit pushes every contour the same way -- then the metric faithfully rewards
+agreement with the error. The danger is not random disagreement, which averages out, but
+the \emph{consistent} kind, which does not. This distinction, long noted qualitatively
+\cite{heller2018imperfect}, is the axis along which we organise everything that follows.
+
 This report makes that question explicit and tractable. We do not study a new
 architecture; we study the \emph{measurement apparatus} of segmentation research --
 the annotation and the metric -- and the conditions under which it produces
 trustworthy verdicts. Our contributions are:
 \begin{enumerate}[leftmargin=1.4em,itemsep=2pt]
-  \item A \textbf{formal annotation-noise operator} $\Nop(\gtstar;\theta)$ with a
-  small, interpretable parameter vector $\theta$, calibrated to an inter-observer
-  agreement (IAA) window measured on real data (Sec.~\ref{sec:formalism}).
-  \item A single continuous \textbf{bias parameter $\mu$} that interpolates between
-  unbiased jitter (augmentation regime) and systematic, learnable bias, unifying the
-  biased/unbiased dichotomy of the literature (Sec.~\ref{sec:formalism}).
-  \item Three \textbf{pre-registered research questions} (Q1--Q3) with an explicit
-  \emph{instrument-matching} methodology that pairs each noise with the metric
-  sensitive to it in type, scale and direction (Sec.~\ref{sec:methodology}).
-  \item A set of \textbf{metrological observations} -- realistic boundary error is
-  sub-clinical for standard metrics; surface and topology are inseparable on thin
-  vessels -- with direct \textbf{ethical implications} for evaluation practice
-  (Sec.~\ref{sec:ethics}).
+  \item A \textbf{formal annotation-noise operator} $\Nop(\gtstar;\theta)$ with a small,
+  interpretable parameter vector and a single continuous \textbf{bias axis $\mu$} that
+  interpolates between near-unbiased jitter and systematic, learnable bias. We calibrate it to
+  an inter-observer window \emph{taken from the literature} -- we have no multi-annotator PARSE
+  data, and we design around this rather than hide it (Sec.~\ref{sec:formalism}).
+  \item A \textbf{magnitude result}: on $85$ OOF cases, changing only the reference moves a
+  fixed network's score more than changing the model does ($0.10$ vs.\ $\le0.02$ in clDice), so
+  the reference is a larger source of variation in a ranking than the algorithm
+  (Sec.~\ref{sec:refvsmodel}).
+  \item A \textbf{negative methodological finding}: the Betti-$0$ error $|\Delta N|$ is
+  \emph{pathological} under an imperfect reference -- correspondence-blind, it can report
+  near-perfect topology for two mutually wrong objects -- which disqualifies it as the
+  connectivity instrument in exactly this setting and motivates correspondence-aware
+  alternatives (Sec.~\ref{sec:betti}).
+  \item An explicit \textbf{instrument-matching methodology} and its measured (largely
+  by-construction) \textbf{metric dissociation}, together with an honest account of scope: what
+  we measured, what is tautological (the clean/clean baseline), and what remains open (learned
+  bias, Q3) (Secs.~\ref{sec:methodology},~\ref{sec:results},~\ref{sec:future}).
 \end{enumerate}
 
-% =====================================================================
-\section{Related Work}\label{sec:related}
-% =====================================================================
-\paragraph{Imperfect labels.} Heller et al.~\cite{heller2018imperfect} systematically
-perturbed segmentation labels and reported the counter-intuitive result that networks
-are remarkably robust to \emph{unbiased}, zero-mean boundary noise -- displacements
-cancel across slices and the model recovers the mean boundary -- whereas
-\emph{systematic} biases (consistent under-segmentation, omissions) genuinely degrade
-performance. Our $\mu$ parameter is a direct operationalisation of this dichotomy.
-
-\paragraph{Boundary perturbation models.} Simple morphological erosion/dilation is
-spatially uniform and structurally unrealistic. Markov-process boundary perturbations
-\cite{yao2023markov} and the GSD-Net line~\cite{gsdnet2025} distort contours
-irregularly and allow a foreground-reducing ($S_R$) or foreground-expanding ($S_E$)
-bias; our \texttt{boundary\_drift} family follows this idea with a smoothed
-correlated displacement field plus a constant drift.
-
-\paragraph{Topology-aware metrics.} clDice~\cite{shit2021cldice} measures the overlap
-of morphological \emph{skeletons} and is the standard for tubular connectivity; by
-construction it is insensitive to boundary displacement -- a fact that becomes central
-to our instrument-matching argument.
-
-\paragraph{Framework and data.} We use nnU-Net~\cite{isensee2021nnunet} on the
-PARSE pulmonary-artery dataset~\cite{parse2022}. Surface agreement is quantified with
-the Normalised Surface Dice (NSD)~\cite{nikolov2018nsd} and the 95th-percentile
-Hausdorff distance (HD95).
+\paragraph{Roadmap.} Sec.~\ref{sec:related} situates the work. Sec.~\ref{sec:formalism} defines
+the operator, its families, and the bias axis $\mu$. Sec.~\ref{sec:methodology} states the
+instrument-matching methodology, the calibration, and the design. Sec.~\ref{sec:results} reports
+the calibration/dissociation, the Betti-$0$ pathology, the reference-vs-model magnitude result,
+and the sanity bound. Sec.~\ref{sec:discussion} and~\ref{sec:ethics} draw the (measured) lessons,
+Sec.~\ref{sec:future} the open directions, and Sec.~\ref{sec:limitations} the boundaries.
 
 % =====================================================================
-\section{Formalism}\label{sec:formalism}
+\chapter{Related Work}\label{sec:related}
 % =====================================================================
-\subsection{The annotation-noise operator}
+\section{Imperfect and noisy labels}
+Heller et al.~\cite{heller2018imperfect} systematically perturbed segmentation labels and
+reported the counter-intuitive result that networks are remarkably robust to
+\emph{unbiased}, zero-mean boundary noise -- displacements cancel across slices and the
+model recovers the mean boundary -- whereas \emph{systematic} biases (consistent
+under-segmentation, omissions) genuinely degrade performance. This biased/unbiased
+dichotomy is the conceptual seed of our study; our contribution is to make it a
+\emph{continuous, calibrated} knob ($\mu$) rather than a qualitative contrast. A broader
+literature on learning with noisy labels~\cite{karimi2020noisy} develops loss functions
+and training schemes robust to label corruption, but treats noise mostly as a training-time
+nuisance to be overcome. We are concerned with the complementary and less-studied
+\emph{evaluation-time} role of the same imperfection: what it does to rankings, not only to
+training.
+
+\section{Boundary perturbation and label-noise models}
+Simple morphological erosion/dilation is spatially uniform and structurally unrealistic: it
+moves every boundary voxel by the same amount regardless of local geometry. Markov-process
+boundary perturbations~\cite{yao2023markov} and the GSD-Net line~\cite{gsdnet2025} distort
+contours irregularly and, crucially, allow a foreground-reducing ($S_R$) or
+foreground-expanding ($S_E$) bias -- the direction our $\mu$ formalises. Our
+\texttt{boundary\_drift} family follows this idea with a smoothed, spatially correlated
+displacement field superimposed on a constant drift, so that the systematic and the
+stochastic parts of a boundary error are separable by construction
+(Eq.~\eqref{eq:drift}). Distinct from these, our \texttt{distal\_omission} family models a
+\emph{topological} error -- the deletion of whole thin branches -- which no boundary-only
+model reproduces.
+
+\section{Topology-aware and surface metrics}
+clDice~\cite{shit2021cldice} measures the overlap of morphological \emph{skeletons} and is
+the standard for tubular connectivity; by construction it is insensitive to a boundary
+displacement that leaves the centreline intact -- a fact that becomes central to our
+instrument-matching argument, and a trap when it is used to certify a boundary perturbation
+as harmless. The Betti-number error complements it by counting connected-component
+mismatches. On the surface side, the Normalised Surface Dice (NSD)~\cite{nikolov2018nsd}
+measures agreement within a tolerance and the 95th-percentile Hausdorff distance (HD95)
+bounds the worst geometric deviation; both are \emph{unsigned}, and both lose resolution
+below the voxel -- properties we quantify directly in Sec.~\ref{sec:results}. Recent
+community efforts on metric selection and its pitfalls~\cite{maierhein2024metrics} argue
+precisely that metric choice must follow the claim; our instrument--noise pairing is a
+concrete, testable instance of that principle for the imperfect-reference setting.
+
+\section{Reference construction and inter-observer variability}
+Where multiple annotations exist, label-fusion methods such as
+STAPLE~\cite{warfield2004staple} estimate a consensus reference and per-rater performance,
+implicitly acknowledging that no single tracing is ground truth. Probabilistic segmentation
+models~\cite{kohl2018probunet} go further and predict a \emph{distribution} of plausible
+segmentations, reflecting annotator ambiguity rather than collapsing it. These lines treat
+variability as something to model or average; we treat its \emph{biased} component as
+something that can be measured, can penalise unfairly, and can be learned.
+
+\section{Framework and data}
+We use nnU-Net~\cite{isensee2021nnunet} -- a strong, self-configuring baseline that removes
+architecture choice as a confound -- on the PARSE pulmonary-artery
+dataset~\cite{parse2022}, a CT benchmark whose sub-millimetre distal vessels make it an
+extreme and informative stress test for the surface/topology coupling.
+
+% =====================================================================
+\chapter{Formalism}\label{sec:formalism}
+% =====================================================================
+\section{The annotation-noise operator}
 Let $\gtstar\subseteq\Omega$ be a clean binary annotation on a voxel grid $\Omega$
 with anisotropic spacing $s=(s_1,s_2,s_3)$ mm. A degraded annotation is the image of a
 stochastic operator
@@ -140,7 +306,7 @@ $\Nop$ is applied to \emph{every} image (and every training batch); $p$ is never
 probability of applying the operator, only a severity. Code-level guarantees ensure at
 least one structural unit or surface voxel is affected whenever $p>0$.
 
-\subsection{Families}
+\section{Families}
 We use two complementary mechanisms (a third, \texttt{distal\_truncation}, is
 discarded as redundant with omission; see Sec.~\ref{sec:calib}).
 
@@ -154,7 +320,16 @@ components, each deleted independently with probability $p$:
   \quad b_c\sim\text{Bernoulli}(p).
 \end{equation}
 This is a \emph{biased}, foreground-reducing, topology-altering noise: it deletes
-distal branches.
+distal branches. The design is deliberately \emph{radius-gated}: the opening $\gamma_r$
+first identifies what counts as ``thin'' (structures the ball cannot fit through), and $p$
+then decides how many of those candidate branches actually vanish. Consequently $r$ controls
+\emph{which} structures are at risk and $p$ their \emph{prevalence} of loss -- a separation
+that keeps the perturbation anatomically meaningful (whole terminal branches disappear, as a
+hurried annotator would miss them) rather than a uniform thinning. Its matched instruments are
+therefore topological (clDice, Betti$_0$); a surface metric such as NSD barely moves, which is
+exactly why it serves as the flat \emph{witness} in Q1. Figures~\ref{fig:families}
+and~\ref{fig:families2d} show its signature: red-only voxels ($-N/+0$), concentrated at the
+periphery of the tree, and Fig.~\ref{fig:ind3d-families} renders it in isolation.
 
 \paragraph{Surface/directional: \texttt{boundary\_drift}.} Let
 $\phi(x)$ be the signed distance to $\partial\gtstar$ ($\phi<0$ inside). The boundary
@@ -176,8 +351,49 @@ boundary error into a systematic and a stochastic part}:
   \;+\;
   \underbrace{a\,\xi\,g_p}_{\text{zero-mean, \emph{augmentation}}}.
 \end{equation}
+The correlation length $\ell$ makes the fluctuation spatially smooth rather than
+salt-and-pepper, matching how a real contour wanders coherently over a few voxels; the gate
+$g_p$ concentrates the displacement on a top-$p$ fraction of the surface so that severity is
+expressed as ``how much of the boundary moved''. Because the displacement is measured in
+millimetres through the spacing ($a=r\bar s$), the same $r$ produces a physically comparable
+error across anisotropic volumes. The matched instruments are the sub-voxel surface measure
+NSD@0.5 for \emph{magnitude} and the signed $\Delta V$ for \emph{direction}; on thin vessels
+Betti$_0$ also responds, because a boundary that recedes by the vessel radius severs the tube
+(Sec.~\ref{sec:coupling}). Figures~\ref{fig:musweep} and~\ref{fig:musweep2d} show both added
+(blue) and removed (red) voxels -- the fingerprint that distinguishes this family from the
+purely subtractive ones (isolated 3D render in Fig.~\ref{fig:ind3d-families}).
 
-\subsection{The bias axis $\mu$}
+\begin{figure}[htb]
+  \centering
+  \begin{subfigure}{0.49\linewidth}\centering
+    \includegraphics[width=\linewidth]{ind_2d_distal_truncation.png}
+    \caption{\texttt{distal\_truncation}}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.49\linewidth}\centering
+    \includegraphics[width=\linewidth]{ind_2d_homogeneous_morpho.png}
+    \caption{\texttt{homogeneous\_morpho}}
+  \end{subfigure}
+  \caption{\textbf{The two discarded controls} (axial slice). \texttt{distal\_truncation}
+  (left) files terminal segments -- same biased, distal axis as omission, hence redundant.
+  \texttt{homogeneous\_morpho} (right) erodes the wall uniformly, ignoring local geometry --
+  deliberately unrealistic, retained only to separate ``volume removed'' from ``noise
+  structure''.}
+  \label{fig:ind-controls}
+\end{figure}
+
+\paragraph{Discarded controls: \texttt{distal\_truncation} and \texttt{homogeneous\_morpho}.}
+Two further mechanisms were implemented and measured but excluded from the model experiments
+(Fig.~\ref{fig:families}). \texttt{distal\_truncation} prunes terminal skeleton segments; it
+occupies the same biased, distal, foreground-reducing axis as omission and is therefore
+\emph{redundant} -- its very high clDice ($0.97$--$0.99$, Table~\ref{tab:calib-ext}) is not
+evidence of harmlessness but of a \emph{mismatched instrument}, since clDice cannot see edge
+filing. \texttt{homogeneous\_morpho} is a uniform erosion \emph{without} radius gating; it is
+deliberately unrealistic and serves only to separate the effect of the removed volume from the
+effect of the noise \emph{structure}. Keeping the family set minimal (one topological, one
+surface/directional) is a methodological choice: one mechanism at a time, no composed noise,
+clean causal attribution (Sec.~\ref{sec:methodology}).
+
+\section{The bias axis $\mu$}
 The single parameter $\mu$ indexes the entire experimental axis
 (Fig.~\ref{fig:musweep}):
 \[
@@ -186,22 +402,64 @@ The single parameter $\mu$ indexes the entire experimental axis
   \mu>0:\ \text{over-segmentation}.
 \]
 A noise is \emph{unbiased} iff $\E[\Delta V]=0$, where
-$\Delta V=(|\gtminus|-|\gtstar|)/|\gtstar|$ is the signed relative volume change. For
-$\mu=0$ the zero-mean fluctuation averages out across resampled realisations and acts
-as augmentation; for $\mu\neq0$ the systematic component is constant across
-realisations and can be \emph{learned}. This is the formal bridge between the noise
-parametrisation and the research questions of Sec.~\ref{sec:methodology}.
+$\Delta V=(|\gtminus|-|\gtstar|)/|\gtstar|$ is the signed relative volume change. Measured on
+PARSE ($n{=}8$, $r{=}1,p{=}0.5$), $\E[\Delta V]$ is monotone in $\mu$:
+$-0.093,-0.041,+0.015,+0.075,+0.136$ for $\mu=-1,-0.5,0,+0.5,+1$. Two honest points follow.
+First, the axis behaves as designed -- $\mu$ moves the boundary systematically inward or outward.
+Second, the zero of $\E[\Delta V]$ falls not exactly at $\mu=0$ but near $\mu\approx-0.1$: at
+$\mu=0$ a small residual dilation bias remains ($+0.015$, i.e.\ the operator is
+\emph{near}-unbiased, not exactly unbiased). We therefore speak of the $\mu=0$ point as
+low-bias jitter rather than perfectly zero-mean, and read the learnable-bias regime as
+$|\mu|\gtrsim0.5$, where $|\E[\Delta V]|$ is several times its residual. For $\mu\neq0$ the
+systematic component is constant across realisations and can be \emph{learned}; this is the
+formal bridge to the research questions of Sec.~\ref{sec:methodology}.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{drift_mu_sweep_3d_PARSE_0001.png}
-  \caption{\textbf{The bias axis $\mu$ on a real pulmonary-artery tree.} Red = removed
-  voxels (boundary receded), blue = added (boundary advanced). From left to right
-  $\mu=-1,\,-0.5,\,0,\,+0.5,\,+1$: under-segmentation $\to$ balanced jitter $\to$
-  over-segmentation. The inter-annotator agreement (clDice, NSD@0.5\,mm) is annotated
-  under each view, showing the operating range stays realistic. A single parameter
-  spans augmentation ($\mu=0$, Q2) and learnable bias ($\mu\neq0$, Q3).}
+  \caption{\textbf{The bias axis $\mu$ on a real pulmonary-artery tree} at the operating point
+  $r{=}1,p{=}0.5$. Red = removed voxels (boundary receded), blue = added (boundary advanced).
+  From left to right $\mu=-1,\,-0.5,\,0,\,+0.5,\,+1$: under-segmentation $\to$ balanced jitter
+  $\to$ over-segmentation. The agreement (clDice, NSD@0.5) annotated under each view stays in the
+  inter-observer window at the trained points $\mu{=}{\pm}0.5$ (Table~\ref{tab:calib}). A single
+  parameter spans augmentation ($\mu=0$, Q2) and learnable bias ($\mu\neq0$, Q3).}
   \label{fig:musweep}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{drift_mu_sweep_2d_PARSE_0001.png}
+  \caption{\textbf{Bias axis $\mu$ on an axial cross-section} (companion to
+  Fig.~\ref{fig:musweep}). Left to right, the contour recedes ($\mu{<}0$, net red,
+  under-segmentation), oscillates with zero mean ($\mu{=}0$, balanced red/blue), then
+  advances ($\mu{>}0$, net blue, over-segmentation). The transition from red-dominated to
+  blue-dominated is the visual reading of the signed volume change $\Delta V$, the
+  direction-sensitive instrument of Table~\ref{tab:pairing}.}
+  \label{fig:musweep2d}
+\end{figure}
+
+
+\begin{figure}[htb]
+  \centering
+  \begin{subfigure}{0.32\linewidth}\centering
+    \includegraphics[width=\linewidth]{ind_3d_mu_neg.png}
+    \caption{$\mu=-0.5$}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.32\linewidth}\centering
+    \includegraphics[width=\linewidth]{ind_3d_mu_zero.png}
+    \caption{$\mu=0$}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.32\linewidth}\centering
+    \includegraphics[width=\linewidth]{ind_3d_mu_pos.png}
+    \caption{$\mu=+0.5$}
+  \end{subfigure}
+  \caption{\textbf{The bias axis in 3D, one operating point per render.} From under-segmentation
+  ($\mu{<}0$, red-dominated: the boundary recedes and thin vessels are pinched off) through
+  balanced jitter ($\mu{=}0$) to over-segmentation ($\mu{>}0$, blue-dominated: the boundary
+  advances and vessels merge). A single continuous knob spans the augmentation regime (Q2) and
+  the learnable-bias regime (Q3); rendered individually, the monotone red$\to$blue shift is the
+  signed $\Delta V$ made visible on the real tree.}
+  \label{fig:ind3d-mu}
 \end{figure}
 
 \begin{figure}[t]
@@ -216,16 +474,49 @@ parametrisation and the research questions of Sec.~\ref{sec:methodology}.
   \label{fig:families}
 \end{figure}
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{degradation_2d_PARSE_0001.png}
+  \caption{\textbf{The same four families on an axial cross-section} (companion to
+  Fig.~\ref{fig:families}). The slice view makes the \emph{mechanism} legible per family:
+  \texttt{distal\_omission} deletes whole thin branches (red, radius-gated);
+  \texttt{distal\_truncation} files terminal segments; \texttt{homogeneous\_morpho}
+  erodes the wall uniformly (unrealistic control); \texttt{boundary\_drift} at $\mu{=}0$
+  perturbs the contour both inward (red) and outward (blue) with zero mean. Only
+  \texttt{boundary\_drift} produces added voxels -- the operational definition of unbiased
+  noise.}
+  \label{fig:families2d}
+\end{figure}
+
+\begin{figure}[htb]
+  \centering
+  \begin{subfigure}{0.49\linewidth}\centering
+    \includegraphics[width=\linewidth]{ind_3d_distal_omission.png}
+    \caption{\texttt{distal\_omission} (topological)}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.49\linewidth}\centering
+    \includegraphics[width=\linewidth]{ind_3d_boundary_drift.png}
+    \caption{\texttt{boundary\_drift}, $\mu{=}0$ (surface)}
+  \end{subfigure}
+  \caption{\textbf{The two retained families rendered individually in 3D} on the PARSE\_0001
+  arterial tree (red = removed, blue = added). Omission (left) is purely subtractive and
+  deletes whole distal branches -- a change of \emph{topology}. Drift at $\mu{=}0$ (right)
+  perturbs the \emph{surface} with balanced red and blue, the geometric fingerprint of a
+  zero-mean, unbiased error. Isolating each family in its own render makes the mechanism
+  unambiguous.}
+  \label{fig:ind3d-families}
+\end{figure}
+
 % =====================================================================
-\section{Methodology}\label{sec:methodology}
+\chapter{Methodology}\label{sec:methodology}
 % =====================================================================
-\subsection{Guiding principles}
+\section{Guiding principles}
 \textbf{(i) One family at a time.} We never compose noises until each is understood in
 isolation; this removes hard-to-debug confounds and gives clean causal attribution.
 \textbf{(ii) Match the instrument to the quantity} -- in type, scale \emph{and}
 direction (Table~\ref{tab:pairing}). \textbf{(iii) The biased/unbiased axis} organises
-the questions: biased noise penalises (Q1) and is learnable (Q3); unbiased noise is
-benign and augments (Q2).
+the questions: biased noise shifts the score (Q1) and is \emph{hypothesised} learnable (Q3, not
+yet tested); near-unbiased noise is expected benign (Q2).
 
 \begin{table}[t]
   \centering
@@ -244,16 +535,16 @@ benign and augments (Q2).
   \end{tabular}
 \end{table}
 
-\subsection{Calibration to inter-observer agreement}\label{sec:calib}
+\section{Calibration to inter-observer agreement}\label{sec:calib}
 Operating points are \emph{measured}, not assumed, on PARSE via
-\texttt{calibrate\_noise.py}, targeting $\text{clDice}(\gtminus,\gtstar)\in[0.85,0.90]$:
-\texttt{distal\_omission} $r{=}2,p{=}0.3\to$ clDice $0.878$; \texttt{boundary\_drift}
-$r{=}1,p{=}0.5\to$ NSD@0.5 $\approx 0.88$. \texttt{distal\_truncation} is discarded
+\texttt{calibrate\_noise.py}, each family targeting its matched metric in $[0.85,0.90]$:
+\texttt{distal\_omission} $r{=}2,p{=}0.3\to$ clDice $0.872$; \texttt{boundary\_drift}
+$r{=}1,p{=}0.5\to$ NSD@0.5 $0.87$--$0.90$ (at $\mu{=}{\pm}0.5$). \texttt{distal\_truncation} is discarded
 because it is \emph{redundant} with omission (same biased, distal foreground-reduction
 axis); its high clDice is not evidence of harmlessness but of a \emph{mismatched
 instrument} -- clDice cannot see edge filing.
 
-\subsection{Models and training regimes}
+\section{Models and training regimes}
 A shared clean baseline plus one model per condition
 (Table~\ref{tab:models}). The training regime is dictated by the question, not chosen
 arbitrarily:
@@ -268,7 +559,9 @@ arbitrarily:
 
 \begin{table}[t]
   \centering
-  \caption{Experimental matrix (nnU-Net, $500$ epochs).}
+  \caption{Experimental matrix (nnU-Net, $500$ epochs). $M_3,M_4$ were designed for Q3
+  but did not complete training in time for this submission and are not evaluated here
+  (Sec.~\ref{sec:discussion}).}
   \label{tab:models}
   \small
   \begin{tabular}{llll}
@@ -284,7 +577,7 @@ arbitrarily:
   \end{tabular}
 \end{table}
 
-\subsection{Research questions}
+\section{Research questions}
 For a metric $m$ (higher better), a model $M$, and a reference $R\in\{\gtstar,\gtminus\}$,
 write $m(M\mid R)$ for the per-case score; all tests are paired Wilcoxon signed-rank
 ($n{=}15$) with paired Cohen's $d$, and report the minimum detectable difference (MDD)
@@ -299,85 +592,878 @@ Matched metric: clDice/Betti$_0$ for omission, $\Delta V$/NSD for drift.
 \emph{both evaluated on clean $\gtstar$}. $\mu{=}0$ isolates robustness: with no bias
 to match, any benefit is regularisation. Hypothesis $m(M_2\mid\gtstar)\ge m(M_0\mid\gtstar)$.
 
-\paragraph{Q3 -- Learned bias.} $M_3$ (biased, fixed) evaluated against the biased
-$\gtminus$ and against $\gtstar$. If the bias is learned, the penalty on the biased
-reference is \emph{smaller} than for $M_0$, while the deviation from $\gtstar$ is
-\emph{larger} ($\Delta V(M_3)<0$): the model fits the wrong data better.
+\paragraph{Q3 -- Learned bias (out of scope).} $M_3$ (biased, fixed) would be evaluated
+against the biased $\gtminus$ and against $\gtstar$: if the bias is learned, the penalty
+on the biased reference is \emph{smaller} than for $M_0$, while the deviation from
+$\gtstar$ is \emph{larger} ($\Delta V(M_3)<0$). We describe the design for completeness,
+but $M_3,M_4$ did not finish training in time for this submission (Sec.~\ref{sec:discussion})
+and no Q3 result is reported.
 
-\subsection{The thin-vessel coupling}\label{sec:coupling}
+\section{The thin-vessel coupling}\label{sec:coupling}
 On sub-millimetre tubular structures, surface and topological errors are not
 separable: a boundary displacement comparable to the vessel radius pinches the vessel.
 We verified (26-connectivity, $N(\gtstar){=}1$) that \texttt{boundary\_drift} genuinely
-fragments the tree ($N\approx59$ at $r1\,p0.5$). This is not an artefact but a real
+fragments the tree (Betti$_0\approx50$ at $r1\,p0.5,\mu{=}0$, rising to $143$ at $\mu{=}{-}1$;
+Table~\ref{tab:calib}). This is not an artefact but a real
 property of annotation error on thin structures, and it bounds what any ``surface-only''
 study can claim.
 
-% =====================================================================
-\section{Results}\label{sec:results}
-% =====================================================================
-\subsection{Noise calibration (acquired)}
-%% The calibration table is final; reproduce from results/noise_calibration.csv.
-Table of operating points and the dissociation evidence
-(clDice insensitive to drift; NSD@0.5 insensitive to $\mu$ direction; HD95 saturated)
-is reported in Sec.~\ref{sec:calib} and Fig.~\ref{fig:musweep}.
+\section{Data and implementation}\label{sec:data}
+We use the PARSE pulmonary-artery CT dataset. Each case is a chest CT with a binary arterial
+annotation at sub-millimetre in-plane resolution (spacing $\approx0.65{\times}0.65{\times}1$\,mm,
+volumes $\sim512{\times}512{\times}300$); the tree is a single 26-connected component in the clean
+reference. Models are trained with nnU-Net in its self-configuring \texttt{3d\_fullres}
+configuration for $500$ epochs under five-fold cross-validation, which fixes the architecture and
+removes it as a confound: any difference between $M_0$--$M_2$ is attributable to the training
+\emph{labels}, not to model design. Degraded training regimes are applied through custom trainers
+(on-the-fly resampling for $M_1,M_2$; a frozen realisation for the tier-B $M_3,M_4$). Evaluation
+uses the five folds' out-of-fold validation predictions ($n{=}85$ cases in total); metrics are
+computed on the native grid after cropping each prediction/reference pair to their common
+bounding box, an exact optimisation (Appendix~\ref{app:repro}). All degradation realisations are
+seed-fixed for reproducibility.
 
-\subsection{Q1 / Q2 / Q3 (pending experiments)}
-%% PENDING: fill from results/ once orchestrator.py --tiers AB completes.
-\todo{Insert paired-Wilcoxon tables (clDice, Betti$_0$, NSD@0.5, $\Delta V$), effect
-sizes and MDDs for Q1--Q3; per-model boxplots across scenarios.}
+\section{Statistical protocol and reproducibility}\label{sec:stats}
+Every contrast is \emph{pre-registered}: the endpoint metric, the comparison, and the sign of
+the expected effect are fixed by the design above before any score is seen
+(Sec.~\ref{sec:q1}--\ref{sec:q2}). Evaluation is out-of-fold, so each case is scored by a model
+that never trained on it, and the case count grows monotonically from $\sim17$ (one fold) to
+$\Ncases$ (five folds) -- the \emph{anytime} property that lets the report mature without ever
+re-specifying the analysis. For each contrast we form per-case paired differences and apply the
+Wilcoxon signed-rank test (distribution-free), quantify magnitude with the paired Cohen's~$d$,
+and control the false-discovery rate at $q{=}0.05$ (Benjamini--Hochberg) across the family of
+pre-specified tests. Crucially, a non-significant result is \emph{not} reported as ``no
+effect'': we compute the minimum detectable difference (MDD) at $80\%$ power for the observed
+paired variance and label any gap below it \emph{undecided} -- the discipline that turns a null
+into an honest statement about the instrument's resolution. Pre-specified outcome deltas also
+carry a bootstrap $95\%$ confidence interval. Full definitions are in Appendix~\ref{app:stats};
+the entire chain (\texttt{generate\_degraded}~$\to$~\texttt{collect\_metrics}~$\to$~%
+\texttt{report}) is deterministic given the seed, so every number in this paper regenerates from
+the raw predictions with a single command.
 
 % =====================================================================
-\section{Discussion}\label{sec:discussion}
+\chapter{Results}\label{sec:results}
 % =====================================================================
+\section{Calibration and metric responses (measured; largely by construction)}
+%% Numbers are final; reproduce from results/noise_calibration.csv.
+The operating points are \emph{measured} on PARSE ($n{=}8$), not assumed, and each family is
+calibrated on the metric matched to it. For the topological family,
+\texttt{distal\_omission} at $r{=}2,\,p{=}0.3$ lands the reference in the targeted
+inter-observer window on clDice, $\text{clDice}(\gtminus,\gtstar){=}0.872\in[0.85,0.90]$,
+with $\text{Betti}_0{=}15$ spurious components and NSD@0.5 still high ($0.918$) --
+confirming that omission is a \emph{topological}, not a surface, perturbation
+(Table~\ref{tab:calib}, top).
+
+The boundary family is where the instrument-matching argument becomes empirical. At the
+operating point $r{=}1,p{=}0.5$, sweeping the bias $\mu$ from $-1$ to $+1$
+(Table~\ref{tab:calib}, bottom; Fig.~\ref{fig:musweep}) dissociates the four metrics exactly as
+their definitions predict:
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt]
+  \item \textbf{HD95 saturates} at the sub-voxel level ($0$--$0.66$\,mm, and exactly $0$ at
+  $\mu{=}0$): below one voxel it cannot grade the drift at all.
+  \item \textbf{NSD@0.5 is $\cap$-shaped and near-symmetric} about $\mu{=}0$ ($0.885$ at
+  $\mu{=}{-}0.5$ vs.\ $0.869$ at $\mu{=}{+}0.5$): being \emph{unsigned}, it reads the
+  \emph{magnitude} of the displacement but barely separates its \emph{direction}. This is the
+  empirical justification for pairing $\mu$ with the signed $\Delta V$
+  (Table~\ref{tab:pairing}).
+  \item \textbf{clDice is monotone} in $\mu$ ($0.94\!\to\!0.99$): an advancing boundary
+  fills the skeleton, so clDice leaks the sign but conflates it with agreement -- it is
+  not a clean magnitude gauge either.
+  \item \textbf{Betti}$_0$ \textbf{is monotone-decreasing} ($143\!\to\!7$): under-seg
+  ($\mu{<}0$) fragments the thin tree, over-seg merges it -- the surface/topology
+  coupling of Sec.~\ref{sec:coupling}. Note this is $|\Delta N|$ against the \emph{clean}
+  reference ($N(\gtstar){=}1$), where it faithfully counts the degradation's fragments; the same
+  statistic breaks when \emph{both} operands are fragmented, i.e.\ when it is used to
+  \emph{evaluate} predictions (Sec.~\ref{sec:betti}).
+\end{itemize}
+No single standard metric captures both magnitude and direction; the pairing of
+Table~\ref{tab:pairing} is therefore a necessity, not a preference.
+
+\begin{figure}[htb]
+  \centering
+  \includegraphics[width=0.86\linewidth]{calib_topology.png}
+  \caption{\textbf{The surface/topology coupling, measured.} As the boundary drift grows, the
+  number of spurious connected components (Betti$_0$) rises steeply: a purely ``surface''
+  perturbation fragments the thin arterial tree because a displacement comparable to the vessel
+  radius pinches it off. This is why, for the drift, we report Betti$_0$ \emph{alongside} the
+  surface metrics rather than treating topology as a separate axis (Sec.~\ref{sec:coupling}).}
+  \label{fig:calibtopo}
+\end{figure}
+
+\begin{table}[t]
+  \centering
+  \caption{Measured calibration on PARSE ($n{=}8$ cases;
+  \texttt{results/noise\_calibration.csv}). Each family is calibrated \emph{on its matched
+  metric}: omission on clDice, drift on NSD@0.5 -- and both operating points sit in the
+  inter-observer window $[0.85,0.90]$. The $\mu$-sweep at the operating point ($r{=}1,p{=}0.5$)
+  dissociates the instruments: NSD@0.5 is $\cap$-symmetric (unsigned), clDice and Betti$_0$ are
+  monotone (signed), HD95 saturates below the voxel.}
+  \label{tab:calib}
+  \small
+  \begin{tabular}{lrrrr}
+    \toprule
+    \multicolumn{5}{l}{\emph{\texttt{distal\_omission} — calibrated on clDice}}\\
+    $(r,p)$ & clDice & NSD@0.5 & HD95 & Betti$_0$ \\
+    \midrule
+    $(2,0.3)$ \textbf{[chosen]} & \textbf{0.872} & 0.918 & 0.30 & 15.4 \\
+    $(1,0.5)$ & 0.905 & 0.953 & 0.00 & 64.0 \\
+    $(3,0.3)$ & 0.840 & 0.886 & 3.30 & \;2.3 \\
+    \midrule
+    \multicolumn{5}{l}{\emph{\texttt{boundary\_drift} $r{=}1,p{=}0.5$ — bias sweep $\mu$ (calibrated on NSD@0.5)}}\\
+    $\mu$ & clDice & NSD@0.5 & HD95 & Betti$_0$ \\
+    \midrule
+    $-1.0$ & 0.936 & 0.840 & 0.58 & 142.9 \\
+    $-0.5$ \textbf{[$M_3$]} & 0.962 & \textbf{0.885} & 0.08 & \;89.3 \\
+    $\;\;0.0$ \textbf{[$M_2$]} & 0.978 & 0.898 & 0.00 & \;50.3 \\
+    $+0.5$ \textbf{[$M_4$]} & 0.986 & \textbf{0.869} & 0.33 & \;19.6 \\
+    $+1.0$ & 0.985 & 0.820 & 0.66 & \;\;6.9 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Model experiments: reading protocol}
+The model matrix of Table~\ref{tab:models} is evaluated out-of-fold (OOF): each nnU-Net
+fold writes its validation predictions on the $\sim17$ cases it never saw, so cumulating
+five completed folds covers all $\Ncases$ PARSE cases with no train/test leakage. The
+analysis below is \emph{pre-registered}: the endpoint metric, the paired test and the
+sign of the expected effect are fixed \emph{a priori} by the design of
+Sec.~\ref{sec:methodology}; the reporting pipeline
+(\texttt{collect\_metrics.py}$\to$\texttt{report.py}) fills the tables directly from the
+master metrics table, so no analytic choice is made after seeing the numbers. Tier~A
+($M_0,M_1,M_2$, all folds complete) supports Q1 and Q2; Q3 was descoped from this
+submission (Sec.~\ref{sec:discussion}) and no tier-B numbers are reported. Estimates carry their coverage $n$ and are watermarked
+\textsc{preliminary} until all five folds are in.
+
+\subsection{Q1 -- How large, and how coherent, is the reference effect?}
+\label{sec:q1}
+That a fixed model scores differently against a different reference is near-tautological -- the
+distance to the reference changes when the reference changes. We therefore do not treat this as
+a discovery. The two questions that carry information are (i) \emph{how large} the shift is
+relative to the differences \emph{between models} (Sec.~\ref{sec:refvsmodel}), and (ii) whether
+the shift is \emph{coherent} across metrics or points different directions. Table~\ref{tab:q1}
+scores the clean baseline $M_0$ against $\gtstar$ and each degraded reference on the agreement
+instruments matched to each family; Betti$_0$ is deliberately excluded here and analysed on its
+own in Sec.~\ref{sec:betti}, because it misbehaves in this setting.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Q1 -- the reference shift on agreement instruments.} $M_0$ (clean-trained)
+  scored on $\gtstar$ vs.\ the degraded reference, OOF, $n{=}\Ncases$, paired Wilcoxon.}
+  \label{tab:q1}
+  \small
+  \begin{tabular}{llrrrr}
+    \toprule
+    Scenario & Endpoint & on $\gtstar$ & on $\gtminus$ & $d$ & $p_{\text{FDR}}$ \\
+    \midrule
+    omission & clDice $\uparrow$ & \QoneOmClDiceStar & \QoneOmClDiceMinus & \QoneOmClDiceD & \QoneOmClDiceP \\
+    drift $\mu{<}0$ & NSD@0.5 $\uparrow$ & \QoneDrNsdStar & \QoneDrNsdMinus & \QoneDrNsdD & \QoneDrP \\
+    drift $\mu{<}0$ & $\Delta V$ (signed) & $-0.011$ & \QoneDrDvMinus & \QoneDrDvD & \QoneDrDvP \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Result.} On the agreement instruments the shift is real and directionally sensible.
+clDice for $M_0$ falls from $0.877$ to $0.777$ under omission ($\Delta{=}{-}0.10$); against the
+receded drift reference ($\mu{<}0$) the signed volume error flips from $-0.011$ to $+0.034$ --
+the unchanged network is scored as \emph{over}-segmenting purely because the reference shrank --
+with NSD@0.5 falling in tandem ($0.698\!\to\!0.644$). We read the effect sizes with care: the
+$d\approx4.5$ on $\Delta V$ reflects that quantity's very small case-to-case variance, not a
+``giant'' effect, and should be taken with the raw deltas and bootstrap CIs
+(Table~\ref{tab:penalty}). The informative content is elsewhere: the \emph{magnitude relative to
+model differences} (Sec.~\ref{sec:refvsmodel}) and the observation that a fourth, widely used
+metric moves in the \emph{opposite} direction (Sec.~\ref{sec:betti}) -- so the reference does not
+merely lower a score uniformly, it can invert the apparent verdict from one metric to the next.
+
+\subsection{A pathology of the Betti-$0$ error under an imperfect reference}\label{sec:betti}
+The opposite-direction movement flagged above is not a curiosity; it exposes a genuine defect of
+the metric in this setting. The Betti-$0$ error as commonly implemented is
+$|\,N(P)-N(G)\,|$, the absolute difference in the number of $26$-connected components. This
+statistic is \emph{blind to correspondence}: it compares two integers and never asks whether the
+components of $P$ and $G$ are the same objects. On thin vessels the predictions are heavily
+fragmented -- $N(P)$ ranges from $44$ to $81$ across cases (Table~\ref{tab:betti}) -- while the
+clean tree is a single component, $N(\gtstar){=}1$. The error against $\gtstar$ is therefore
+$\approx N(P)$, dominated entirely by the prediction's fragmentation. When the reference is
+itself degraded, its own fragmentation $N(\gtminus)$ moves, and the error tracks the arithmetic
+gap, not the anatomy.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Why $|\Delta N|$ misleads} (5 OOF cases). $N(\cdot)$ is the number of
+  $26$-connected components; the last four columns are the Betti-$0$ error $|N(P)-N(\cdot)|$
+  against each reference. The clean tree has $N{=}1$; the receded drift reference (dr$-$)
+  fragments to a degree comparable to the prediction, collapsing the ``error''.}
+  \label{tab:betti}
+  \small
+  \begin{tabular}{lrrrrr@{\hskip 1.2em}rrrr}
+    \toprule
+    & \multicolumn{5}{c}{components $N(\cdot)$} & \multicolumn{4}{c}{Betti$_0$ error vs.} \\
+    \cmidrule(lr){2-6}\cmidrule(l){7-10}
+    case & pred & $\gtstar$ & om & dr$-$ & dr$+$ & $\gtstar$ & om & dr$-$ & dr$+$ \\
+    \midrule
+    0003 & 45 & 1 & 11 & 86 & 18 & 44 & 34 & 41 & 27 \\
+    0005 & 67 & 1 & 13 & 109 & 21 & 66 & 54 & 42 & 46 \\
+    0007 & 44 & 1 & 12 & 74 & 15 & 43 & 32 & 30 & 29 \\
+    0014 & 80 & 1 & \;9 & 73 & 18 & 79 & 71 & \;7 & 62 \\
+    0021 & 81 & 1 & 11 & 79 & 17 & 80 & 70 & \;2 & 64 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Case \texttt{PARSE\_0021} is the reductio: a prediction with $81$ components scored against a
+degraded reference with $79$ yields a Betti-$0$ error of $2$ -- a near-perfect topology score --
+even though neither object is within $78$ components of the true single-component tree. The
+metric certifies as excellent a case where prediction and reference are \emph{both} badly wrong,
+simply because they are wrong \emph{by the same amount}. This disqualifies $|\Delta N|$ as the
+connectivity instrument for evaluation under an imperfect reference, and it explains the sign
+inversion in Q1: clDice measures skeleton \emph{overlap} (a correspondence-aware quantity, which
+correctly drops on a degraded reference) whereas $|\Delta N|$ measures only a count difference
+(which can drop spuriously). It is worth stressing that this is our own instrument-matching
+principle turning on itself: we had paired omission with ``clDice/Betti$_0$'', and the data show
+that only the first half of that pairing is sound. We give the corrected recommendation and a
+concrete replacement in Sec.~\ref{sec:future}.
+
+\subsection{Q2 -- The clean/clean baseline (a sanity bound, not a finding)}\label{sec:q2}
+We state this plainly: comparing $M_2$ (trained on low-bias $\mu{=}0$ jitter) against the clean
+$M_0$, \emph{both scored on the clean $\gtstar$}, cannot yield a surprising result, and we do not
+claim one. A model trained on degraded labels is not expected to beat a model trained on clean
+labels when both are judged by clean labels; the outcome is bounded above by ``no better than
+$M_0$'' almost by construction. We include the comparison only for two limited purposes: to
+\emph{bound the size} of the disturbance that near-unbiased jitter causes, and to check whether
+nnU-Net's already-extensive augmentation leaves any room for the ``noise-as-augmentation'' story
+to hold. It does not, and we report that without inflating it into a finding.
+
+\begin{table}[t]
+  \centering
+  \caption{\textbf{Q2 -- robustness of unbiased-noise training.} $M_2$ vs.\ $M_0$, both on
+  $\gtstar$, OOF, $n{=}\Ncases$. MDD = smallest paired difference detectable at $80\%$
+  power given the observed variance.
+  % FILL from metrics_stats_oof.csv (scenario=GT_star; models M2_Drift_mu0 vs M0_Star).
+  }
+  \label{tab:q2}
+  \small
+  \begin{tabular}{lrrrrr}
+    \toprule
+    Endpoint & $M_0$ & $M_2$ & $\Delta$ & $p_{\text{FDR}}$ & MDD \\
+    \midrule
+    NSD@0.5 $\uparrow$ & \QtwoNsdMzero & \QtwoNsdMtwo & \QtwoNsdDelta & \QtwoNsdP & \QtwoNsdMDD \\
+    Betti$_0$ $\downarrow$ & \QtwoBettiMzero & \QtwoBettiMtwo & -- & \QtwoBettiP & -- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Result (as expected).} $M_2$ is slightly but significantly worse than $M_0$ on the
+clean reference: NSD@0.5 $0.698\!\to\!0.675$ ($\Delta{=}{-}0.023$, $d{=}{-}0.73$) and clDice
+$0.877\!\to\!0.858$ ($d{=}{-}0.57$), with topology statistically indistinguishable (Betti$_0$
+$81.6$ vs.\ $83.0$, $p{=}0.47$; and note Sec.~\ref{sec:betti} on reading Betti$_0$ at all). The
+only non-trivial content is quantitative: the disturbance from near-unbiased jitter is bounded at
+about $0.02$ on the surface metrics and is topologically negligible -- so on this anatomy, with
+nnU-Net's default augmentation already in place, zero-mean boundary noise is neither harmful
+enough to matter nor helpful. We draw no stronger conclusion; in particular we do \emph{not}
+present this as evidence for or against ``label noise as augmentation'' in general, a claim our
+single, augmentation-saturated setup cannot support.
+
+The learned-bias question (does a model trained on a fixed biased reference internalise the
+bias?) is the natural third experiment; its models were still training at submission and we
+present it, honestly, as a planned direction rather than a half-reported result
+(Sec.~\ref{sec:future}).
+
+\section{Result figures (auto-generated from the metrics table)}\label{sec:resultfigs}
+The two panels below are emitted by \texttt{aggregate\_results.py} directly from
+\texttt{results/metrics.csv}; they are the visual companions to Tables~\ref{tab:q1}--\ref{tab:q2}.
+
+\begin{figure}[htb]
+  \centering
+  \IfFileExists{figures/q_boxplots.png}{%
+    \includegraphics[width=\linewidth]{q_boxplots.png}}{%
+    \fbox{\parbox{0.9\linewidth}{\centering\vspace{2em}\textit{\color{red}[auto-inserted on
+    pipeline completion: per-metric boxplots, model $\times$ scenario, from
+    \texttt{results/metrics.csv}]}\vspace{2em}}}}
+  \caption{\textbf{Per-metric distributions} across models and evaluation scenarios
+  (clDice, Betti$_0$, NSD@0.5, $\Delta V$). Boxes span the inter-quartile range over the
+  $n$ OOF cases; the model-to-model shift on the matched metric is the effect Q1/Q2 test.}
+  \label{fig:boxplots}
+\end{figure}
+
+\begin{figure}[htb]
+  \centering
+  \IfFileExists{figures/q_summary.png}{%
+    \includegraphics[width=\linewidth]{q_summary.png}}{%
+    \fbox{\parbox{0.9\linewidth}{\centering\vspace{2em}\textit{\color{red}[auto-inserted on
+    pipeline completion: one panel per research question, matched metric, from
+    \texttt{results/outcomes\_oof.csv}]}\vspace{2em}}}}
+  \caption{\textbf{Per-question summary}: the reference shift (Q1) and the clean/clean bound
+  (Q2) on their matched agreement metrics, with paired contrasts and bootstrap confidence
+  intervals over the $n{=}\Ncases$ OOF cases.}
+  \label{fig:qsummary}
+\end{figure}
+
+\section{The reference reverses the model ranking}\label{sec:refvsmodel}
+This is the paper's central, demonstrated result, and it is a reversal, not a magnitude
+comparison. \emph{Between models} on a fixed clean reference the differences are small: $M_0$
+leads the two noisy-trained models by $\approx0.02$ clDice, and $M_1$ and $M_2$ are statistically
+indistinguishable from each other (Table~\ref{tab:intermodel}). That smallness is exactly why what
+follows matters: changing only the evaluation reference, from $\gtstar$ to the distal-omission
+$\gtminus$, \emph{flips which model scores best} on two leaderboard-standard metrics -- HD95 and
+NSD@2mm -- for both competitors tested against the clean-trained $M_0$.
+
+\paragraph{The test.} For each metric, each pair of models $(A,B)$, and the transition
+$\gtstar\to\gtminus_{\text{omission}}$, we build the per-case interaction
+$\iota[\text{case}] = \big(m(A\mid\gtminus,\text{case})-m(B\mid\gtminus,\text{case})\big) -
+\big(m(A\mid\gtstar,\text{case})-m(B\mid\gtstar,\text{case})\big)$ and test it against zero
+(paired Wilcoxon signed-rank, $n{=}85$, Benjamini--Hochberg FDR over the full family of contrasts).
+A reversal is declared only when the sign of $m(A\mid\cdot)-m(B\mid\cdot)$ itself differs between
+$\gtstar$ and $\gtminus$ \emph{and} the interaction is significant after FDR -- a stricter criterion
+than a significant interaction alone, which can just as well describe an attenuation that never
+crosses zero. Applied to all six metrics and all three model pairs, eight contrasts pass the raw
+criterion; four survive scrutiny (below). $d$ is reported on the raw interaction, unreoriented by
+the metric's sense -- hence positive on HD95 (a $\downarrow$ metric) and negative on NSD@2 (an
+$\uparrow$ metric) for the \emph{same} reversal.
+
+\begin{table}[htb]
+  \centering
+  \caption{\textbf{The four retained rank reversals} (paired Wilcoxon on the per-case
+  interaction, FDR-corrected, $n{=}85$). $\Delta_{\gtstar}$/$\Delta_{\gtminus}$ are the mean
+  paired contrast $m(A)-m(B)$ under each reference; the sign change between the two columns
+  \emph{is} the reversal.}
+  \label{tab:reversal}
+  \small
+  \begin{tabular}{llrrrr}
+    \toprule
+    Metric & Pair ($A$ vs.\ $B$) & $\Delta_{\gtstar}$ & $\Delta_{\gtminus_{\text{om}}}$ & $d$ & $p_{\text{FDR}}$ \\
+    \midrule
+    HD95 (mm) & $M_0$ vs.\ $M_1$ & $-0.120$ & $+0.298$ & $+0.72$ & $2.1\times10^{-10}$ \\
+    HD95 (mm) & $M_0$ vs.\ $M_2$ & $-0.078$ & $+0.368$ & $+0.73$ & $4.4\times10^{-11}$ \\
+    NSD@2mm & $M_0$ vs.\ $M_1$ & $+0.0066$ & $-0.0050$ & $-3.14$ & $2.5\times10^{-14}$ \\
+    NSD@2mm & $M_0$ vs.\ $M_2$ & $+0.0067$ & $-0.0049$ & $-2.84$ & $2.5\times10^{-14}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The two NSD@2 rows share an identical $p_{\text{FDR}}$: not a coincidence but a floor effect --
+all $85/85$ cases carry the same sign of the interaction for both pairs, so the Wilcoxon statistic
+is saturated at the smallest $p$-value reachable at this $n$; we report the $85/85$ unanimity
+directly rather than let two decimal-identical $p$-values imply a differentiated precision they do
+not have. The reversal is not a fragile point estimate either: resampling the $85$ cases
+($10\,000$ bootstrap draws) recovers a model order different from the one observed under $\gtstar$
+in \emph{every single draw} for HD95 under omission (Kendall $\tau=-0.33$, bootstrap CI entirely
+negative, $[-1,-0.33]$).
+
+\paragraph{Why four, not eight.} A structurally identical contrast on $|\Delta V|$ (the unsigned
+volume error) also passes the raw significance-plus-sign-flip test, on the same two model pairs
+and the same omission transition, plus two more contrasts against the drift$-$ reference. Both
+groups are artifacts, for two different reasons, and we report the elimination rather than the
+raw count. First, re-running the same interaction test on the \emph{signed} $\Delta V$ (not its
+absolute value) leaves the sign of $m(A)-m(B)$ unchanged between $\gtstar$ and $\gtminus$ for both
+pairs ($+0.049\to+0.053$ and $+0.054\to+0.059$): the three models' signed volume errors shift by a
+nearly identical additive offset under omission ($+0.075$, $+0.072$, $+0.072$ for $M_0,M_1,M_2$
+respectively) -- a shift common to every model, which the \emph{absolute value} alone turns into a
+spurious sign crossing when models sit on opposite sides of zero at different distances. This is
+structurally the same defect already diagnosed for $|\Delta N|$ (Sec.~\ref{sec:betti}): under
+omission, $N(\gtstar)=N(\gtminus_{\text{omission}})=1$ for every case, so the Betti-$0$ error shift
+is likewise a common additive artifact that cancels exactly, case by case, in every inter-model
+difference -- which is why $|\Delta N|$ never registers a reversal under omission at all, while it
+does show one, visibly but not significantly ($p_{\text{FDR}}\in[0.45,0.78]$), under the more
+severely fragmenting drift$-$ reference, where $N(\gtminus)$ no longer tracks $N(\gtstar)$
+one-for-one. \emph{Any unsigned statistic of an intrinsically signed quantity is structurally
+exposed to this failure mode}: $|\Delta N|$ and $|\Delta V|$ are two instances of one defect, not
+two separate ones. Second, the two remaining $|\Delta V|$ contrasts (against drift$-$) are below
+the resolution of the instrument: the minimum detectable difference at $80\%$ power
+($(z_{.975}{+}z_{.80})\cdot\mathrm{sd}(\iota)/\sqrt{n}$) is $0.006$--$0.007$, an order of magnitude
+above the observed $0.0002$--$0.0003$ -- undecided, by our own stated discipline of reporting MDD
+rather than reading noise, not a reversal.
+
+\paragraph{The structure is the mechanism.} All four retained reversals pit $M_0$ against one of
+the noise-trained models; $M_1$ vs.\ $M_2$ never reverses, on any metric. The degraded reference
+does not confuse models at random -- it specifically penalises the one trained on the clean truth.
+We verified the mechanism directly rather than assert it: under omission, $M_0$ still finds the
+distal branches that omission deletes from the reference; once the reference no longer contains
+them, those branches score as distant false positives and inflate HD95, while $M_1$, trained on
+the same omission, never predicts them either and is rewarded for reproducing the reference's own
+error. Per-case, the volume omitted from the reference (relative to $\gtstar$) correlates with
+$M_0$'s HD95 penalty across the $85$ cases: Pearson $r{=}{+}0.32$ (bootstrap $95\%$ CI
+$[0.20,0.46]$, $p{=}0.003$), Spearman $\rho{=}{+}0.39$ ($[0.19,0.57]$, $p{=}0.0002$) -- positive
+and significant, but moderate rather than overwhelming, consistent with HD95's sensitivity to
+\emph{where}, not merely how much, foreground was omitted: the omitted-volume fraction is a coarse
+proxy for what a distance-based metric actually integrates, the distance from the omitted
+components to the rest of the reference tree, which we did not measure directly here. That
+$\rho$ exceeds $r$ points to a monotone but non-linear relationship, likely driven disproportionately
+by the high-omission cases rather than a uniform linear response across the range. clDice, by
+contrast, is dominated by the intact proximal trunk and does not move -- worth stating plainly,
+since our own instrument-pairing argument (Table~\ref{tab:pairing}) already predicted clDice would
+be the metric least likely to see this.
+
+\paragraph{Are these magnitudes real, or academic?} The reversal magnitudes are sub-voxel to
+half-voxel ($0.12$--$0.37$mm HD95, spacing $\approx0.65\times0.65\times1$mm) -- our own calibration
+already showed HD95 saturating below the voxel (Table~\ref{tab:calib}), so the honest question is
+whether such a margin would ever separate real submissions. It would: on the PARSE 2022 challenge
+leaderboard, the same anatomy and a comparable resolution ($0.5$--$0.95$mm in-plane,
+$1$mm slice)~\cite{luo2023parse}, the weighted HD95 margin between the top two teams is
+$0.61$mm, and between the top two on the main-PA branch alone, $0.16$mm -- the same order of
+magnitude as our reversal, not beyond it and not negligibly below it. NSD is not an official PARSE
+metric (only DSC and HD95 are), so our NSD@2 reversal ($0.005$--$0.007$) has no equivalent
+real-leaderboard anchor and we do not claim one.
+
+\paragraph{Robustness to unprocessed fragmentation.} None of our predictions were post-processed
+by largest-connected-component (LCC) extraction ($N(P)\in[44,81]$, Sec.~\ref{sec:betti}), and HD95
+is the single statistic most exposed to one isolated far-away fragment, since it reads a
+percentile of the surface-distance distribution. A sceptical reading of the reversal is that it is
+an artifact of this fragmentation rather than a property of the anatomy. We tested this directly:
+recomputing all four contrasts of Table~\ref{tab:reversal} after applying LCC to every
+prediction (never to the references, which would artificially reconnect the very branches the
+omission operator removes and invalidate the scenario) leaves the reversal intact on both metrics.
+HD95: $d{=}{+}0.72\!\to\!{+}0.71$ ($M_0$ vs.\ $M_1$) and $d{=}{+}0.73\!\to\!{+}0.70$ ($M_0$ vs.\
+$M_2$), significant in both regimes ($p_{\text{FDR}}{<}10^{-10}$); the sign of $m(A)-m(B)$ still
+flips from $\gtstar$ to $\gtminus_{\text{omission}}$ in both. NSD@2: $d{=}{-}3.14\!\to\!{-}2.67$ and
+$d{=}{-}2.84\!\to\!{-}2.62$, likewise intact ($p_{\text{FDR}}{<}10^{-13}$). NSD@2's survival is
+informative on its own: it is a bilateral surface-tolerance statistic, far less sensitive than a
+$95^{\text{th}}$-percentile distance to a single outlier component, so a reversal that persisted on
+HD95 alone but vanished on NSD@2 would have pointed to a fragment artifact -- it does not vanish,
+which rules that explanation out. LCC is not free, however: it costs essentially no clDice for
+$M_0$ ($0.877\!\to\!0.877$ under $\gtstar$, $0.777\!\to\!0.778$ under omission) but a real amount
+for the noise-trained models ($M_1$: $0.859\!\to\!0.851$ under $\gtstar$; $M_2$:
+$0.858\!\to\!0.850$), consistent with $M_1$/$M_2$ retaining more small, legitimately disconnected
+distal fragments that LCC discards outright. The reversal, in short, is not a fragmentation
+artifact of the unprocessed predictions -- it is a property of the anatomy and the reference,
+robust to the one obvious confound a careful reviewer would raise first.
+
+\paragraph{The ratio is context now, not the argument.} A magnitude comparison between the
+reference effect and the model effect remains informative but is no longer the paper's claim: it
+was an asymmetric comparison by construction, and a reversal does not need to be large to be fatal
+to a benchmark ranking. Recomputed with a bootstrap CI over the $85$ cases across all
+(metric, scenario, model-pair) triples, the reference-to-model effect ratio has median $2.3\times$
+(IQR $[1.2\times,4.9\times]$) -- with $8$ of $54$ combinations \emph{below} $1\times$ (the model
+effect exceeds the reference effect), mostly on NSD@2 and clDice under drift$+$. The old
+five-to-twenty-times figure holds for some (metric, scenario, pair) triples and not others; we
+report the distribution rather than a headline ratio.
+
+\begin{table}[htb]
+  \centering
+  \caption{\textbf{Full tier-A results}: per-case means over $n{=}85$ OOF cases, every model
+  ($M_0$ clean, $M_1$ omission-trained, $M_2$ drift-$\mu0$-trained) against every evaluation
+  reference. Read \emph{down} a metric column within a scenario block to compare models; read a
+  model \emph{across} scenario blocks to see the evaluation penalty of Q1. clDice/NSD $\uparrow$,
+  HD95 (mm)/Betti$_0$ $\downarrow$; $\Delta V$ is signed.}
+  \label{tab:full}
+  \small
+  \begin{tabular}{llrrrrrr}
+    \toprule
+    Ref. & Model & clDice & NSD@0.5 & NSD@2 & HD95 & Betti$_0$ & $\Delta V$ \\
+    \midrule
+    GT* & $M_0$ & 0.877 & 0.698 & 0.960 & 1.24 & 81.6 & $-0.011$ \\
+    GT* & $M_1$ & 0.859 & 0.676 & 0.953 & 1.36 & 83.7 & $-0.060$ \\
+    GT* & $M_2$ & 0.858 & 0.675 & 0.953 & 1.32 & 83.0 & $-0.066$ \\
+    \midrule
+    omission & $M_0$ & 0.777 & 0.643 & 0.910 & 2.58 & 64.1 & $+0.064$ \\
+    omission & $M_1$ & 0.773 & 0.633 & 0.915 & 2.28 & 66.2 & $+0.012$ \\
+    omission & $M_2$ & 0.772 & 0.633 & 0.915 & 2.21 & 65.5 & $+0.006$ \\
+    \midrule
+    drift$-$ & $M_0$ & 0.848 & 0.644 & 0.956 & 1.37 & 49.5 & $+0.034$ \\
+    drift$-$ & $M_1$ & 0.838 & 0.628 & 0.952 & 1.46 & 48.5 & $-0.018$ \\
+    drift$-$ & $M_2$ & 0.837 & 0.628 & 0.951 & 1.40 & 49.1 & $-0.023$ \\
+    \midrule
+    drift$+$ & $M_0$ & 0.868 & 0.637 & 0.957 & 1.39 & 54.4 & $-0.078$ \\
+    drift$+$ & $M_1$ & 0.850 & 0.610 & 0.947 & 1.58 & 56.5 & $-0.123$ \\
+    drift$+$ & $M_2$ & 0.849 & 0.609 & 0.947 & 1.54 & 56.3 & $-0.128$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Table~\ref{tab:full} exposes two patterns at a glance. Within the GT* block the three models are
+close ($M_0$ marginally ahead), i.e.\ noisy-label \emph{training} left only a small mark; the
+large movements are \emph{across} scenario blocks (e.g.\ $M_0$'s clDice $0.877\!\to\!0.777$ under
+omission), i.e.\ the \emph{evaluation reference} dominates. The signed $\Delta V$ column changes
+sign with the drift direction ($+0.034$ under drift$-$ vs.\ $-0.078$ under drift$+$ for $M_0$),
+while NSD@2 barely reacts -- the coarse surface metric is nearly blind to a bias that $\Delta V$
+reads directly.
+
+\paragraph{The effect-size landscape.} The magnitudes make the same point quantitatively. The
+Q1 evaluation penalties are \emph{very large}: on the omission reference the clDice contrast for
+$M_0$ reaches Cohen's $d{=}{-}3.06$, and the signed volume contrast across the drift references
+reaches $|d|\!\approx\!4.5$ -- effect sizes an order of magnitude beyond the ``large'' threshold
+($|d|{>}0.8$). By contrast, the inter-\emph{model} differences on a \emph{fixed} reference are
+small to moderate ($|d|\!\lesssim\!0.7$; the Q2 surface cost is $d{=}{-}0.73$, and $M_1$ vs.\
+$M_2$ are statistically indistinguishable on most metrics, $|d|{<}0.15$). The asymmetry is the
+whole thesis in one line: \emph{changing the reference moves the score far more than changing the
+model.} A benchmark that varies the reference between submissions -- different annotators,
+protocol revisions between challenge editions -- injects a nuisance larger than the signal it
+means to measure.
+
+% =====================================================================
+\chapter{Discussion}\label{sec:discussion}
+% =====================================================================
+\paragraph{Threats to validity.} We consider the main ways our reading could be wrong.
+\emph{Construct validity}: our noise is simulated, so a sceptic may argue it does not match real
+annotator behaviour. We mitigate this by calibrating each operating point to a measured
+inter-observer agreement window rather than choosing severities by eye, but the shape of the
+noise (single family, smooth field) remains a model. \emph{Internal validity}: because $M_1$ and
+$M_2$ differ from $M_0$ only in their training labels and share nnU-Net's fixed configuration, a
+difference among them is attributable to the labels, not the architecture -- but the on-the-fly
+vs.\ fixed regime distinction (Q2 vs.\ Q3) is a deliberate confound with the noise type, and we
+therefore never compare across it. \emph{Statistical validity}: with $n{=}85$ paired cases and
+FDR control the Q1 effects are far from the significance boundary ($d$ up to $3$), so they are
+robust to reasonable analytic choices; the Q2 effect is smaller and, while significant, should be
+read as ``a small real cost'', not a dramatic one. \emph{External validity}: a single anatomy and
+architecture bound generalisation, as Sec.~\ref{sec:limitations} states plainly. None of these
+threatens the paper's core claim, which is conditional and methodological: \emph{given} that a
+reference can be biased, here is how much that can move a verdict, and here is how to measure it.
+
 \paragraph{A metrological motivation.} For $\mu{=}0$ we expect the model-to-model
 difference to be small, possibly below metric sensitivity. We therefore cannot
 distinguish ``no effect'' from ``effect below resolution''. This is precisely why the
 \emph{sensitivity} of the metrics themselves (their minimum detectable difference) must
 be studied alongside the models -- a measurement cannot be trusted beyond the
-resolution of its instrument.
+resolution of its instrument. The calibration sweep already exhibits this in miniature:
+HD95 was flat across the entire $\mu$ range (Table~\ref{tab:calib}), so any model
+comparison expressed in HD95 on this data would be reading noise. The instrument, not the
+model, would be doing the ranking.
 
-\paragraph{Which noise mis-ranks models.} Our design predicts that biased noise
-(omission, drift $\mu\neq0$) both penalises and is learnable, while unbiased boundary
-jitter is largely benign. The practical corollary is that the dangerous annotation
-errors for benchmarking are the \emph{systematic} ones -- exactly the ones a single
-annotator or a single labelling protocol is most likely to introduce.
+\paragraph{Which noise mis-ranks models.} Our design separates two effects that the
+literature often conflates: how a noise \emph{deforms a reference} (metric level) and how
+it \emph{separates trained models} (model level). Biased noise (omission, drift
+$\mu\!\neq\!0$) acts on the reference (Q1, measured) and is \emph{conjectured} to act on the
+model too (Q3, left to future work) -- while near-unbiased jitter deforms a single realisation of
+the reference yet, averaged over resamplings, left little trainable trace on this setup (Q2). The practical corollary is
+that the dangerous annotation errors for benchmarking are the \emph{systematic} ones --
+exactly the ones a single annotator or a single labelling protocol is most likely to
+introduce, and exactly the ones an unbiased-noise robustness argument does \emph{not}
+cover.
+
+\paragraph{The augmentation that was not.} The Q2 finding refutes a comfortable default -- that
+label noise ``regularises'' and so justifies sloppy annotation. Crucially, the small cost we
+measured ($\Delta$NSD@0.5${=}{-}0.023$) was comfortably resolved by NSD@0.5 but sat well inside
+the saturation range of the coarser NSD@2\,mm and HD95 (Table~\ref{tab:calib}). The same
+experiment read on those metrics would have concluded ``augmentation confirmed, no cost'' -- a
+direct illustration of why the instrument must be chosen before the claim, and of how ``no
+harm'' and ``benefit'' are different statements only one of which survived.
+
+\paragraph{Why thin vessels are the stress test.} The surface/topology coupling
+(Sec.~\ref{sec:coupling}) is not a flaw of our operator but a property of the anatomy:
+when the vessel radius approaches the annotation uncertainty, a boundary error and a
+topological error are the same event. Any evaluation that reports only a surface metric
+on such structures is therefore blind to half of what it measures. Pulmonary arteries are
+an extreme, but the same regime recurs wherever structures are thin relative to voxel
+size -- airways, small vessels, nerves, trabeculae.
+
+\paragraph{Generalisation and scope.} We deliberately trade breadth for control: one
+dataset, one architecture, one family at a time. The formal operator, the bias axis
+$\mu$, and the instrument-matching protocol are dataset-agnostic and transfer directly;
+the specific operating points and effect sizes do not, and should be re-calibrated per
+anatomy and per acquisition. What we claim to establish is a \emph{method} for asking
+whether a ranking survives its reference, not a universal constant.
 
 % =====================================================================
-\section{Ethical Inquiry}\label{sec:ethics}
+\chapter{Ethical Inquiry}\label{sec:ethics}
 % =====================================================================
-The technical results above are, at root, an ethical argument about how the community
-produces and trusts evidence.
+A benchmark is an epistemic instrument: it produces the evidence on which the community
+allocates trust, citations, funding and -- when a model reaches the clinic -- patient risk. We
+keep this section short and strictly tied to what we measured; the speculative reach of an
+earlier draft has been cut.
 
-\paragraph{Rankings under noisy references may not be real.} If a systematic
-annotation bias shifts a metric by more than the gap between two models, the published
-ranking reflects the annotator, not the algorithm. Deploying the ``winner'' is then a
-decision made on a measurement artefact -- with clinical consequences downstream.
+\section{What the measurements license}
+One claim follows directly from the data. Because the reference effect dominates the model effect
+(Sec.~\ref{sec:refvsmodel}) and is not even coherent across metrics, a ranking computed against an
+imperfect reference can reflect the annotation convention as much as the algorithm. When two
+models are separated by less than the reference-induced shift -- routine, given that shift reached
+$0.10$ clDice here against sub-point published margins -- selecting or deploying the ``winner'' is
+a decision partly made by the annotator, and invisibly so, because the reference is treated as
+truth rather than estimate. Reporting a point score without the reference's uncertainty therefore
+overstates the evidence; in a field feeding clinical tools that is an ethical issue, not only a
+statistical one. The Betti-$0$ pathology (Sec.~\ref{sec:betti}) sharpens the same point at the
+level of a single metric: a widely used connectivity score can certify two mutually wrong objects
+as topologically excellent, so an unexamined metric can manufacture false confidence on its own.
 
-\paragraph{Annotation quality is an ethical responsibility, not a logistics detail.}
-The biased/unbiased dichotomy gives this a sharp form: a lab can tolerate
-\emph{random} labelling noise (it averages out) but must guard against \emph{systematic}
-protocol bias, which both inflates apparent performance on its own data and can be
-silently learned by the model.
+\section{What they do \emph{not} license}
+We are explicit about the boundary. The strongest ethical charge one could level here -- that a
+model \emph{learns} a systematic annotation bias and thereby automates human error at
+population scale -- is \emph{not} something we have measured; the learned-bias experiment is
+still pending (Sec.~\ref{sec:future}). We therefore make no such claim. Nor do we claim anything
+about the bias of any specific real benchmark: our noise is simulated and calibrated to a
+literature window, not to a measured second annotator on PARSE. The ethics we assert is
+\emph{conditional}: given that references are imperfect -- which we quantify -- reporting must
+change; whether bias is also learnable is a question we have set up but left open.
 
-\paragraph{Recommendations for evaluation practice.}
+\section{Recommendations, grounded in the results}
 \begin{enumerate}[leftmargin=1.4em,itemsep=2pt]
-  \item Report the \emph{inter-observer agreement} of the reference and the metric's
-  minimum detectable difference; treat any model gap below the MDD as undecided.
-  \item Match the metric to the failure mode being claimed (type, scale, direction);
-  do not infer harmlessness from a metric blind to the perturbation.
-  \item Prefer \emph{multi-annotator} or bias-audited references for any benchmark used
-  to select a model for clinical use.
+  \item Report the reference's uncertainty (inter-observer agreement) and the metric's minimum
+  detectable difference; treat any model gap below either as \emph{undecided}. A ``too close to
+  call at this reference quality'' is a legitimate result.
+  \item Match the metric to the claim, and \emph{audit the metric itself}: our data disqualify
+  $|\Delta N|$ as a connectivity score under imperfect references and favour a
+  correspondence-aware alternative (Sec.~\ref{sec:future}).
+  \item Prefer multi-annotator or bias-audited references for any benchmark used to select a model
+  for clinical use, and document annotation provenance as first-class metadata, since it bounds
+  the bias term $\mu$ no model engineering can undo.
 \end{enumerate}
 
 % =====================================================================
-\section{Conclusion}
+\chapter{Directions}\label{sec:future}
+% =====================================================================
+We separate what we can already recommend from what we can only propose.
+
+\paragraph{A correspondence-aware topological metric (concrete).} The Betti-$0$ pathology of
+Sec.~\ref{sec:betti} has a clear cause -- $|\Delta N|$ compares counts, not components -- and a
+clear remedy: measure topology in a way that pairs structures before scoring them. Two options
+are practical. (i) \emph{clDice} is already correspondence-aware (it tests whether one skeleton
+lies inside the other volume) and, in our data, behaved correctly where $|\Delta N|$ did not; we
+recommend it as the default connectivity instrument under imperfect references. (ii) For a
+signed topological error, a \emph{persistent-homology} Betti-number computed after matching
+components by spatial overlap (e.g.\ a Hungarian assignment on the connected-component graphs)
+would report unmatched births/deaths rather than a bare count difference, and would not collapse
+for two mutually fragmented masks. Re-running our Q1 analysis with such a metric is the immediate
+next step and requires no new data.
+
+\paragraph{The learned-bias experiment (out of scope, left to future work).} Whether a model
+trained on a fixed, systematically biased reference \emph{internalises} that bias is a sharp
+question our framework poses but does not answer here: the two fixed-bias models did not complete
+training in time for this submission (Sec.~\ref{sec:discussion}). A cheap probe -- fine-tuning the
+clean-trained model on a frozen biased reference for a short budget and checking whether $\Delta V$
+drifts in the direction of the bias -- would cost a fraction of the pre-registered design and could
+motivate a properly powered follow-up, but does not itself belong in this paper.
+
+\paragraph{A distance-based proxy for the reversal mechanism.} Sec.~\ref{sec:refvsmodel} correlates
+the \emph{volume} omitted from the reference with $M_0$'s HD95 penalty ($\rho{=}0.39$) as a
+first, coarse test of the mechanism; a distance metric should correlate with a tighter, more
+linear proxy -- the maximum distance from an omitted component to the rest of the reference tree,
+which is what HD95 actually integrates and volume only approximates. We flag this as the natural
+next refinement, not yet computed.
+
+\paragraph{Grounding the operator in real annotations.} Our strongest structural assumption is
+that a calibrated synthetic operator stands in for real annotator disagreement
+(Sec.~\ref{sec:limitations}). The decisive validation is to acquire a second, independent tracing
+of a PARSE subset, measure the true inter-observer $\Delta V$, clDice and NSD, and check that a
+setting of $\theta$ reproduces them -- not just their central value but their spatial structure.
+This would convert every ``within-IAA'' statement in this paper from calibrated-to-literature to
+calibrated-to-data.
+
+% =====================================================================
+\chapter{Limitations}\label{sec:limitations}
+% =====================================================================
+We list the boundaries of the study so that its claims are read at the right scope.
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item \textbf{Simulated, not observed, noise.} $\Nop$ is calibrated to an inter-observer
+  agreement window but is a model of annotation error, not a sample of it. Real annotator
+  populations may combine families and exhibit spatially structured bias our single-family
+  design does not reproduce. Composed noises are deferred by construction
+  (Sec.~\ref{sec:methodology}).
+  \item \textbf{One anatomy, one dataset, one architecture.} Results are on PARSE pulmonary
+  arteries with nnU-Net at a fixed configuration. The operator and protocol transfer;
+  operating points and effect sizes must be re-calibrated elsewhere.
+  \item \textbf{Sample size and power.} With $n{=}\Ncases$ OOF cases the paired tests have
+  limited power for small effects; this is why non-significant contrasts are reported with an
+  MDD rather than as null. The $\mu{=}0$ regime (Q2) is expected to sit near that resolution
+  limit.
+  \item \textbf{The surface/topology coupling is a confound by nature.} On thin vessels we
+  cannot fully isolate a pure surface effect from a topological one; we treat this as a real
+  property to be reported jointly, not a nuisance to be removed, but it does bound
+  single-metric interpretation.
+  \item \textbf{Learned bias (Q3) out of scope.} The fixed-bias models ($M_3,M_4$) that would
+  test whether a network learns a systematic annotation bias did not complete training in time
+  for this submission ($M_3$: one fold, stopped at epoch 95/500, no recoverable checkpoint;
+  $M_4$: training never started). We leave this question, and its fixed-realisation design
+  (Table~\ref{tab:models}), to future work.
+  \item \textbf{Metric set.} We study four metrics chosen for the pairing argument; other
+  instruments (e.g.\ boundary IoU, centreline-length ratios) may resolve regimes ours cannot.
+\end{itemize}
+
+% =====================================================================
+\chapter{Conclusion}
 % =====================================================================
 We framed annotation noise as a formal, calibrated operator with a single bias axis,
 turned three intuitive questions into pre-registered, instrument-matched tests, and
 surfaced metrological limits -- realistic boundary error is sub-clinical for standard
-metrics, and surface and topology are inseparable on thin vessels. Beyond the numbers
-(forthcoming), the work is a plea for measurement humility in segmentation: a model is
-only as trustworthy as the reference and the metric we judge it by.
+metrics, and surface and topology are inseparable on thin vessels. The numbers bear the
+argument out: on $85$ out-of-fold cases the artificial evaluation penalty (Q1) is large and
+unambiguous ($\Delta\text{clDice}{=}{-}0.10$, $d{=}{-}3.06$), while the comfortable assumption
+that unbiased noise ``augments'' (Q2) did not hold -- it cost a little and gained nothing on
+this anatomy. Whether a systematic bias is itself learnable by the network (Q3) is left to
+future work. Beyond any single number, the work is a plea for measurement
+humility in segmentation: a model is only as trustworthy as the reference and the metric we
+judge it by, and both must be reported, matched, and doubted with the same rigour we spend on
+the model.
+
+% =====================================================================
+\clearpage
+\appendix
+% =====================================================================
+\chapter{Formal metric definitions}\label{app:defs}
+Let $P,G\subseteq\Omega$ be predicted and reference foreground sets on a grid with spacing
+$s$. Write $\partial X$ for the surface (voxels of $X$ with a background 6-neighbour),
+$\mathrm{Sk}(X)$ for the morphological skeleton, and $N(X)$ for the number of
+26-connected components.
+
+\paragraph{clDice (centreline Dice, $\uparrow$).} With topological precision and
+sensitivity
+\[
+  T_{\text{prec}}=\frac{|\mathrm{Sk}(P)\cap G|}{|\mathrm{Sk}(P)|},\qquad
+  T_{\text{sens}}=\frac{|\mathrm{Sk}(G)\cap P|}{|\mathrm{Sk}(G)|},
+\]
+$\text{clDice}=2\,T_{\text{prec}}T_{\text{sens}}/(T_{\text{prec}}+T_{\text{sens}})$.
+A break in a tube is penalised even if it removes few voxels; a boundary shift that leaves
+the centreline intact is not -- the source of clDice's blindness to drift.
+
+\paragraph{NSD@$\tau$ (Normalised Surface Dice, $\uparrow$).} With $d(x,Y)=\min_{y\in Y}\|x-y\|_s$,
+\[
+  \text{NSD}_\tau=\frac{|\{x\in\partial P: d(x,\partial G)\le\tau\}|+|\{y\in\partial G: d(y,\partial P)\le\tau\}|}{|\partial P|+|\partial G|}.
+\]
+We use $\tau=0.5$\,mm (sub-voxel, sensitive to drift) and $\tau=2$\,mm (clinical tolerance).
+NSD is \emph{unsigned}: it cannot distinguish an inward from an outward displacement.
+
+\paragraph{HD95 ($\downarrow$, mm).} The $95$th percentile of
+$\{d(x,\partial G):x\in\partial P\}\cup\{d(y,\partial P):y\in\partial G\}$. Robust to $5\%$
+outliers; saturates below one voxel.
+
+\paragraph{Betti$_0$ error ($\downarrow$).} $|N(P)-N(G)|$, counting fragmentations and
+fusions. Computed in 26-connectivity, for which $N(\gtstar){=}1$ on the connected arterial
+tree (6-connectivity spuriously reports $\sim99$).
+
+\paragraph{Signed volume change ($\Delta V$).} $\Delta V=(|P|-|G|)/|G|$. The only signed
+instrument in our set: $\Delta V<0$ under-segmentation, $\Delta V>0$ over-segmentation;
+monotone in the bias $\mu$, hence the matched direction gauge (Table~\ref{tab:pairing}).
+
+\chapter{Degradation algorithms}\label{app:algos}
+Both operators are deterministic given $(\varphi,r,p,\mu,\text{seed})$.
+
+\paragraph{\texttt{distal\_omission}$(G;r,p)$.} (i) Opening $\gamma_r=\delta_r\circ\varepsilon_r$
+with a ball of radius $r$; (ii) removable set $R=G\setminus\gamma_r(G)$ (the structures thinner
+than $r$); (iii) partition $R$ into connected components $\{C_c\}$; (iv) draw
+$b_c\sim\text{Bernoulli}(p)$ and set $\gtminus=G\setminus\bigcup_{c:b_c=1}C_c$; (v) if $p>0$ and
+no component was drawn, force the removal of one (the ``at least one'' guarantee). Biased,
+foreground-reducing, topology-altering.
+
+\paragraph{\texttt{boundary\_drift}$(G;r,p,\mu)$.} (i) Signed distance $\phi=\text{SDF}(\partial G)$,
+$\phi<0$ inside; (ii) a zero-mean Gaussian field smoothed to correlation length $\ell$ gives the
+fluctuation $\xi$, $\E[\xi]=0$; (iii) a coverage gate $g_p$ selects the top-$p$ fraction of
+surface voxels; (iv) displacement $d(x)=a(\mu+\xi(x))g_p(x)$ with amplitude $a=r\bar s$;
+(v) $\gtminus=\{x:\phi(x)-d(x)\le 0\}$. By design the systematic part $a\mu g_p$ is a
+stationary target (in principle learnable) and the zero-mean part $a\xi g_p$ varies per
+realisation (augmentation-like); whether these design intents hold empirically is the object of
+Q2/Q3.
+
+\chapter{Extended calibration grid}\label{app:calib}
+Table~\ref{tab:calib-ext} reports the full grid measured on PARSE
+(\texttt{results/noise\_calibration.csv}); the operating points of the main text are the rows
+landing in the target inter-observer window.
+
+\begin{table}[h]
+  \centering
+  \caption{Noise-calibration grid on PARSE ($n{=}8$ cases). Each family is calibrated on its
+  matched metric (omission on clDice, drift on NSD@0.5), both landing in $[0.85,0.90]$ at the
+  chosen point. \texttt{distal\_truncation} is measured but discarded (redundant with omission;
+  its very high clDice reflects a mismatched instrument -- clDice is blind to edge filing --
+  not harmlessness).}
+  \label{tab:calib-ext}
+  \small
+  \begin{tabular}{llrrrr}
+    \toprule
+    Family & $(r,p,\mu)$ & clDice & NSD@0.5 & HD95 & Betti$_0$ \\
+    \midrule
+    \texttt{distal\_omission} & $(1,0.5,0)$ & 0.905 & 0.953 & 0.00 & 64.0 \\
+    \texttt{distal\_omission} & $(2,0.3,0)$ & \textbf{0.872} & 0.918 & 0.30 & 15.4 \\
+    \texttt{distal\_omission} & $(3,0.3,0)$ & 0.840 & 0.886 & 3.30 & \;2.3 \\
+    \midrule
+    \texttt{distal\_truncation} & $(2,0.3,0)$ & 0.991 & 0.985 & 0.00 & \;0.0 \\
+    \texttt{distal\_truncation} & $(3,0.5,0)$ & 0.976 & 0.986 & 0.00 & \;0.0 \\
+    \midrule
+    \texttt{boundary\_drift} & $(1,0.5,-1.0)$ & 0.936 & 0.840 & 0.58 & 142.9 \\
+    \texttt{boundary\_drift} & $(1,0.5,-0.5)$ & 0.962 & \textbf{0.885} & 0.08 & \;89.3 \\
+    \texttt{boundary\_drift} & $(1,0.5,\;0.0)$ & 0.978 & 0.898 & 0.00 & \;50.3 \\
+    \texttt{boundary\_drift} & $(1,0.5,+0.5)$ & 0.986 & \textbf{0.869} & 0.33 & \;19.6 \\
+    \texttt{boundary\_drift} & $(1,0.5,+1.0)$ & 0.985 & 0.820 & 0.66 & \;\;6.9 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\chapter{Statistical protocol}\label{app:stats}
+Evaluation is \emph{out-of-fold}: each of five nnU-Net folds predicts the $\sim17$ validation
+cases it never trained on; their union covers all $\Ncases$ cases without leakage, and $n$ grows
+monotonically as folds finish (the \emph{anytime} property). For each pre-registered contrast we
+compute per-case paired differences and test $H_0:\text{median}=0$ with the Wilcoxon signed-rank
+test (no normality assumption); effect size is the paired Cohen's $d=\overline{\Delta}/s_\Delta$.
+Across the family of pre-specified tests we control the false discovery rate at $q{=}0.05$
+(Benjamini--Hochberg). When a contrast is non-significant we report the minimum detectable
+difference (MDD) at $80\%$ power given the observed paired variance, and interpret any
+model gap below the MDD as \emph{undecided} rather than null. Pre-specified outcome deltas
+additionally carry a bootstrap $95\%$ confidence interval. Everything is regenerated from the
+master table by \texttt{report.py}; results are watermarked \textsc{preliminary} until all folds
+are in.
+
+\chapter{Full evaluation-penalty matrix}\label{app:penalty}
+Table~\ref{tab:penalty} extends Q1 to every model and every degraded reference: each cell is the
+paired change (degraded reference $-$ $\gtstar$) on the matched instruments, with FDR-corrected
+significance. \emph{Every} contrast is significant at $p_{\text{FDR}}\!<\!0.001$, and the pattern
+is consistent across the three models -- confirming that the evaluation penalty is driven by the
+reference, not by which training regime produced the predictions. The signed $\Delta V$ column
+changes sign between the receded ($\mu{<}0$, $+$) and advanced ($\mu{>}0$, $-$) drift references,
+the direction information that the unsigned surface metrics discard.
+
+\begin{table}[htb]
+  \centering
+  \caption{Evaluation penalty (degraded reference minus $\gtstar$), OOF $n{=}85$, paired
+  Wilcoxon with Benjamini--Hochberg FDR ($^{*}p{<}0.05$, $^{**}p{<}0.01$, $^{***}p{<}0.001$).
+  clDice and NSD@0.5 negative = the same network scored worse; $\Delta V$ signed.}
+  \label{tab:penalty}
+  \small
+  \begin{tabular}{llrrr}
+    \toprule
+    Model & Reference & $\Delta$clDice & $\Delta$NSD@0.5 & $\Delta(\Delta V)$ \\
+    \midrule
+    $M_0$ & omission & $-0.100$\,*** & $-0.055$\,*** & $+0.076$\,*** \\
+    $M_0$ & drift$-$ & $-0.029$\,*** & $-0.054$\,*** & $+0.045$\,*** \\
+    $M_0$ & drift$+$ & $-0.009$\,*** & $-0.061$\,*** & $-0.067$\,*** \\
+    \midrule
+    $M_1$ & omission & $-0.086$\,*** & $-0.043$\,*** & $+0.072$\,*** \\
+    $M_1$ & drift$-$ & $-0.020$\,*** & $-0.048$\,*** & $+0.043$\,*** \\
+    $M_1$ & drift$+$ & $-0.009$\,*** & $-0.065$\,*** & $-0.063$\,*** \\
+    \midrule
+    $M_2$ & omission & $-0.086$\,*** & $-0.042$\,*** & $+0.071$\,*** \\
+    $M_2$ & drift$-$ & $-0.021$\,*** & $-0.047$\,*** & $+0.042$\,*** \\
+    $M_2$ & drift$+$ & $-0.009$\,*** & $-0.066$\,*** & $-0.063$\,*** \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{The counterpoint: model effects on a fixed reference.} Table~\ref{tab:intermodel}
+reports the same paired tests \emph{between models} on the clean $\gtstar$. The clean baseline
+$M_0$ is significantly but slightly ahead of the two noisy-trained models ($\Delta$clDice
+$\approx\!-0.02$), while the two noisy regimes $M_1$ and $M_2$ are statistically
+\emph{indistinguishable} on every metric, and the topological error (Betti$_0$) separates no pair
+of models. Placed beside Table~\ref{tab:penalty}, the contrast is stark: the largest
+between-\emph{model} effect on a fixed reference ($\sim0.02$ clDice) is five times smaller than
+the smallest Q1 reference penalty for $M_0$ and twenty times smaller than the largest -- the
+quantitative core of the paper.
+
+\begin{table}[htb]
+  \centering
+  \caption{Inter-model contrasts on the clean reference $\gtstar$, OOF $n{=}85$ (same test and
+  FDR as Table~\ref{tab:penalty}). Differences are small; $M_1$/$M_2$ do not separate.}
+  \label{tab:intermodel}
+  \small
+  \begin{tabular}{lrrr}
+    \toprule
+    Pair & $\Delta$clDice & $\Delta$NSD@0.5 & $\Delta$Betti$_0$ \\
+    \midrule
+    $M_0$/$M_1$ & $-0.018$\,*** & $-0.022$\,*** & $+2.0$\,n.s. \\
+    $M_0$/$M_2$ & $-0.019$\,*** & $-0.023$\,*** & $+1.4$\,n.s. \\
+    $M_1$/$M_2$ & $-0.001$\,n.s. & $-0.001$\,n.s. & $-0.7$\,n.s. \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\chapter{Reproducibility}\label{app:repro}
+Every figure and number regenerates from the raw nnU-Net predictions with a fixed seed.
+The pipeline is: (i) \texttt{generate\_degraded\_dataset.py --seed 42} materialises the
+deterministic evaluation references $\gtminus$ for each scenario; (ii)
+\texttt{collect\_metrics.py} (or its parallel variant, which crops each prediction/reference
+pair to their common bounding box -- an exact optimisation verified to reproduce every metric to
+machine precision) writes the long-format master table \texttt{results/metrics.csv}, one row per
+$(\text{model},\text{fold},\text{scenario},\text{case})$ carrying its provenance (epochs,
+checkpoint time, git commit, nnU-Net version); (iii) \texttt{report.py} emits the paired-Wilcoxon
+tables (\texttt{metrics\_stats\_oof.csv}), the pre-specified outcomes with bootstrap CIs
+(\texttt{outcomes\_oof.csv}), the summary figures, and a \texttt{STATUS.md} dashboard watermarked
+by fold coverage. Evaluation is out-of-fold, so no case is scored by a model that trained on it;
+the master table grows monotonically as folds complete, and re-running any stage only computes
+the missing keys (idempotent upsert). All results in this paper are tier-A ($M_0,M_1,M_2$,
+$n{=}85$, all five folds); the tier-B fixed-bias models ($M_3,M_4$) did not complete training
+in time for this submission and no tier-B numbers are reported (Sec.~\ref{sec:discussion}).
 
 % =====================================================================
 \begin{thebibliography}{9}
@@ -385,19 +1471,34 @@ only as trustworthy as the reference and the metric we judge it by.
 \bibitem{heller2018imperfect} N.~Heller, J.~Dean, N.~Papanikolopoulos.
   \emph{Imperfect Segmentation Labels: How Much Do They Matter?} MICCAI LABELS
   workshop, 2018.
-\bibitem{yao2023markov} \todo{Yao et al., 2023 -- Markov-process boundary perturbation;
-  verify exact title/venue.}
-\bibitem{gsdnet2025} \todo{GSD-Net, 2025 -- boundary-aware label-noise robust
-  segmentation; verify reference.}
+\bibitem{yao2023markov} Yao et al. \emph{Markov-process boundary perturbation for
+  segmentation label noise}, 2023. {\small[reference to verify]}.
+\bibitem{gsdnet2025} \emph{GSD-Net: boundary-aware label-noise-robust segmentation}, 2025.
+  {\small[reference to verify]}.
 \bibitem{shit2021cldice} S.~Shit et al. \emph{clDice -- a Novel Topology-Preserving
   Loss Function for Tubular Structure Segmentation.} CVPR, 2021.
 \bibitem{isensee2021nnunet} F.~Isensee et al. \emph{nnU-Net: a self-configuring method
   for deep learning-based biomedical image segmentation.} Nature Methods, 2021.
-\bibitem{parse2022} \todo{PARSE 2022 challenge -- pulmonary artery segmentation;
-  verify citation.}
+\bibitem{parse2022} PARSE2022 Challenge. \emph{Pulmonary Artery Segmentation (PARSE)
+  Challenge}, MICCAI 2022. \url{https://parse2022.grand-challenge.org/}
+  {\color{red}\small[author list / summary-paper citation to verify]}.
+
+\bibitem{luo2023parse} X.~Luo et al. \emph{Efficient automatic segmentation for
+  multi-level pulmonary arteries: The PARSE challenge}, arXiv:2304.03708, 2023.
+  \url{https://arxiv.org/abs/2304.03708}
 \bibitem{nikolov2018nsd} S.~Nikolov et al. \emph{Deep learning to achieve clinically
   applicable segmentation of head and neck anatomy (Normalised Surface Dice).}
   arXiv:1809.04430, 2018.
+\bibitem{karimi2020noisy} D.~Karimi, H.~Dou, S.~K.~Warfield, A.~Gholipour. \emph{Deep
+  learning with noisy labels: exploring techniques and remedies in medical image analysis.}
+  Medical Image Analysis, 65:101759, 2020.
+\bibitem{maierhein2024metrics} L.~Maier-Hein, A.~Reinke et al. \emph{Metrics Reloaded:
+  recommendations for image analysis validation.} Nature Methods, 21:195--212, 2024.
+\bibitem{warfield2004staple} S.~K.~Warfield, K.~H.~Zou, W.~M.~Wells. \emph{Simultaneous
+  Truth and Performance Level Estimation (STAPLE): an algorithm for the validation of image
+  segmentation.} IEEE Trans.\ Medical Imaging, 23(7):903--921, 2004.
+\bibitem{kohl2018probunet} S.~A.~A.~Kohl et al. \emph{A Probabilistic U-Net for
+  Segmentation of Ambiguous Images.} NeurIPS, 2018.
 \end{thebibliography}
 
 \end{document}

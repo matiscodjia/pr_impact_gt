@@ -1,0 +1,9 @@
+question,outcome,metric,n,mean_a,mean_b,delta,ci_lo,ci_hi,cohens_d,p_value
+Q1,Q1_omission_penalty,cldice,85,0.877,0.7771,-0.0999,-0.1068,-0.0931,-3.058,0.0
+Q1,Q1_omission_penalty,betti0,85,81.6471,64.1412,-17.5059,-19.2118,-15.8353,-2.167,0.0
+Q1,Q1_GT_minus_drift_neg_penalty,nsd05,85,0.6978,0.6436,-0.0543,-0.0595,-0.0486,-2.116,0.0
+Q1,Q1_GT_minus_drift_neg_penalty,volume_delta,85,-0.0112,0.0335,0.0447,0.0426,0.0468,4.548,0.0
+Q1,Q1_GT_minus_drift_pos_penalty,nsd05,85,0.6978,0.6367,-0.0611,-0.0659,-0.0558,-2.589,0.0
+Q1,Q1_GT_minus_drift_pos_penalty,volume_delta,85,-0.0112,-0.0778,-0.0666,-0.0702,-0.0629,-3.917,0.0
+Q2,Q2_robustness,nsd05,85,0.6978,0.6752,-0.0226,-0.029,-0.0159,-0.731,0.0
+Q2,Q2_robustness,cldice,85,0.877,0.8578,-0.0192,-0.0263,-0.0119,-0.573,0.0

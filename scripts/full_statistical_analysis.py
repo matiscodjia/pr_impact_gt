@@ -7,7 +7,14 @@ Deux types de comparaisons appariées (Wilcoxon) sur toutes les métriques :
 
 Correction FDR Benjamini-Hochberg appliquée sur l'ensemble des tests.
 
-Usage
+STATUT (vérifié 2026-09-07, triage pré-P0) : ce module N'EST PAS mort. Sa fonction
+``build_tests`` est importée par ``report.py``, qui est la source réelle de
+``results/metrics_stats_oof.csv`` / ``outcomes_oof.csv`` (donc des tables du rapport
+LaTeX). Seul le bloc ``main()`` ci-dessous (CLI autonome lisant par défaut
+``results/cross_evaluation.csv``, un fichier qui n'existe plus dans le pipeline actuel)
+est obsolète — ne pas l'invoquer directement, utiliser ``report.py``.
+
+Usage (obsolète, conservé pour référence)
 -----
     python scripts/full_statistical_analysis.py --csv results/cross_evaluation.csv
 """

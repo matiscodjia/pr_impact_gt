@@ -32,6 +32,7 @@ Usage
     python analysis/dose_response.py --workers 4
     python analysis/dose_response.py --stats-only      # ré-agrège sans recalculer
     python analysis/dose_response.py --ps 0.3 --seed 1042 --tag _draw1042 --workers 32
+    python analysis/dose_response.py --ps 0.1 0.15 0.2 0.25 0.3 --tag _fine --ref-cldice
 """
 
 from __future__ import annotations
@@ -85,10 +86,10 @@ def _bbox(mask, margin):
 
 def _task(args):
     import nibabel as nib
-    from cross_evaluate import _hd95_cached, _nsd_cached
+    from cross_evaluate import _hd95_cached, _nsd_cached, compute_cldice
     from degradations import apply_degradation_pipeline
 
-    idx, case, fold, ps, seed = args
+    idx, case, fold, ps, seed, ref_cldice = args
     nii = nib.load(f"{RAW}/labelsTr/{case}")
     spacing = tuple(float(s) for s in nii.header.get_zooms()[:3])
     star_full = np.asanyarray(nii.dataobj) > 0
@@ -118,6 +119,8 @@ def _task(args):
                             for a, b in zip(ordered[:-1], ordered[1:]))
     for p in ps:
         info[f"omitted_vox_p{p}"] = int((star_full & ~refs[p]).sum())
+        if ref_cldice:                   # sévérité de la référence elle-même (fenêtre [0.85, 0.90])
+            info[f"cldice_ref_p{p}"] = compute_cldice(refs[p][bb], star)
 
     union = star_full.copy()
     for m in preds_full.values():
@@ -142,7 +145,7 @@ def _path(args, stem):
 def compute(args):
     folds = case_fold_map()
     cases = [os.path.basename(f) for f in sorted(glob.glob(f"{RAW}/labelsTr/*.nii.gz"))]
-    tasks = [(i, c, int(folds[c]), args.ps, args.seed) for i, c in enumerate(cases)]
+    tasks = [(i, c, int(folds[c]), args.ps, args.seed, args.ref_cldice) for i, c in enumerate(cases)]
     if args.limit:                       # essai rapide : les N premiers cas seulement
         tasks = tasks[:args.limit]
     with Pool(args.workers, maxtasksperchild=2) as pool:
@@ -154,6 +157,10 @@ def compute(args):
     if args.seed == 42 and info.matches_stored.notna().any():   # réf. stockée = graine 42
         print(f"validation p=0.3 == référence stockée : {int(info.matches_stored.sum())}/{len(info)} cas")
     print(f"omissions emboîtées : {int(info.nested_ok.sum())}/{len(info)} cas")
+    if args.ref_cldice:
+        for p in args.ps:
+            c = info[f"cldice_ref_p{p}"]
+            print(f"clDice(GT-_p{p}, GT*) = {c.mean():.4f}  ({(c.between(0.85, 0.90)).mean():.0%} des cas dans [0.85, 0.90])")
     return df
 
 
@@ -193,6 +200,8 @@ def main():
     ap.add_argument("--stats-only", action="store_true")
     ap.add_argument("--tag", default="", help="suffixe des fichiers de sortie, ex. _draw1042")
     ap.add_argument("--limit", type=int, default=0, help="n'évaluer que les N premiers cas (essai)")
+    ap.add_argument("--ref-cldice", action="store_true",
+                    help="mesurer aussi clDice(GT-_p, GT*) par cas (dans *_checks.csv)")
     args = ap.parse_args()
     df = (pd.read_csv(_path(args, "_metrics")) if args.stats_only else compute(args))
     stats(df, args.seed, args)

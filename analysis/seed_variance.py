@@ -12,7 +12,9 @@ Pour chaque réplicat, métrique (HD95, NSD@2) et paire (M0 vs M1, M0 vs M2) :
     delta_omis  = moyenne_cas[ m(M0|GT-) - m(Mk|GT-) ]
     interaction = delta_omis - delta_star, d de Cohen apparié, changement de signe
 Puis, entre réplicats : moyenne / écart-type / min / max de delta_star et de l'interaction,
-et nombre de réplicats où l'écart change de signe. C'est ce qui répond à « −0,12 mm de HD95
+et nombre de réplicats où l'écart change de signe. Le changement de signe est aussi jugé par la
+règle MDD de l'étude (analysis/mdd_crossing.py) : croisement résolu si |delta_omis| >= MDD =
+(z_.975 + z_.80) sd(iota) / sqrt(n), strict si en plus Wilcoxon(iota) p brut < 0,05. C'est ce qui répond à « −0,12 mm de HD95
 sur référence propre dépasse-t-il la variance de graine ? » -- sans prétendre à un IC :
 2 à 3 réplicats ne permettent qu'une plage, pas un intervalle.
 
@@ -27,12 +29,14 @@ import sys
 
 import numpy as np
 import pandas as pd
+from scipy.stats import norm, wilcoxon
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from stats_utils import paired_cohens_d  # noqa: E402
 
 BASE = {"M0": "M0_Star", "M1": "M1_Omission", "M2": "M2_Drift_mu0"}
 METRICS = ("hd95", "nsd")
+Z = norm.ppf(0.975) + norm.ppf(0.80)   # MDD à 80 % de puissance, bilatéral 5 %
 
 
 def load(seeds_dir):
@@ -72,10 +76,15 @@ def main():
                 d_star = star["M0"] - star[other]
                 d_om = omis["M0"] - omis[other]
                 iota = d_om - d_star
+                flip = bool(np.sign(d_star.mean()) != np.sign(d_om.mean()))
+                mdd = Z * iota.std(ddof=1) / np.sqrt(len(iota))
+                p = wilcoxon(iota.values).pvalue
                 rows.append({"seed": seed, "metric": metric, "pair": f"M0_vs_{other}", "n": len(iota),
                              "delta_star": d_star.mean(), "delta_omis": d_om.mean(),
                              "interaction": iota.mean(), "d": paired_cohens_d(iota.values),
-                             "sign_flip": bool(np.sign(d_star.mean()) != np.sign(d_om.mean()))})
+                             "sign_flip": flip, "mdd": mdd, "p_wilcoxon": p,
+                             "resolved": flip and abs(d_om.mean()) >= mdd,
+                             "strict": flip and abs(d_om.mean()) >= mdd and p < 0.05})
     per = pd.DataFrame(rows)
     summ = []
     for (metric, pair), g in per.groupby(["metric", "pair"]):
@@ -85,12 +94,13 @@ def main():
                      "delta_omis": g.delta_omis.mean(),
                      "interaction": g.interaction.mean(), "interaction_sd": g.interaction.std(ddof=1),
                      "interaction_min": g.interaction.min(), "interaction_max": g.interaction.max(),
-                     "sign_flip": int(g.sign_flip.sum())})
+                     "sign_flip": int(g.sign_flip.sum()), "strict": int(g.strict.sum())})
     out = pd.concat([per, pd.DataFrame(summ)], ignore_index=True)
     out.to_csv("results/seed_variance.csv", index=False)
     pd.set_option("display.width", 240); pd.set_option("display.max_columns", 30)
     print(per.round(4).to_string(index=False))
-    print("\n-- entre réplicats (sign_flip = nombre de réplicats avec inversion) --")
+    print("\n-- entre réplicats (sign_flip / strict = nombre de réplicats avec inversion / avec inversion"
+          " au-delà de la MDD et p < 0,05) --")
     print(pd.DataFrame(summ).round(4).to_string(index=False))
 
 

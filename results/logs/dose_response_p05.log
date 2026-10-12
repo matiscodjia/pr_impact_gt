@@ -1,0 +1,7 @@
+omissions emboîtées : 85/85 cas
+clDice(GT-_p0.5, GT*) = 0.7832  (7% des cas dans [0.85, 0.90])
+metric               pair  p_omission  delta_star  delta_ref  sign_flip  interaction_mean  ci_low  ci_high       d  p_raw  n
+  hd95  M0_vs_M1_Omission         0.5     -0.1198     1.0832       True            1.2029  1.0024   1.4430  1.1508    0.0 85
+  hd95 M0_vs_M2_Drift_mu0         0.5     -0.0781     1.1534       True            1.2315  1.0256   1.4727  1.1716    0.0 85
+   nsd  M0_vs_M1_Omission         0.5      0.0066    -0.0138       True           -0.0203 -0.0216  -0.0191 -3.5341    0.0 85
+   nsd M0_vs_M2_Drift_mu0         0.5      0.0067    -0.0137       True           -0.0204 -0.0218  -0.0192 -3.2648    0.0 85

@@ -1,0 +1,70 @@
+tirages: 10 | p=0.3 | workers: 6
+[draw 1042] déjà fait
+[draw 2042] 09:51:47
+omissions emboîtées : 85/85 cas
+metric               pair  p_omission  delta_star  delta_ref  sign_flip  interaction_mean  ci_low  ci_high       d  p_raw  n
+  hd95  M0_vs_M1_Omission         0.3     -0.1198     0.2750       True            0.3947  0.2939   0.5371  0.7119    0.0 85
+  hd95 M0_vs_M2_Drift_mu0         0.3     -0.0781     0.3427       True            0.4209  0.3155   0.5652  0.7422    0.0 85
+   nsd  M0_vs_M1_Omission         0.3      0.0066    -0.0050       True           -0.0116 -0.0125  -0.0107 -2.7488    0.0 85
+   nsd M0_vs_M2_Drift_mu0         0.3      0.0067    -0.0049       True           -0.0116 -0.0126  -0.0107 -2.5483    0.0 85
+[draw 3042] 10:01:26
+omissions emboîtées : 85/85 cas
+metric               pair  p_omission  delta_star  delta_ref  sign_flip  interaction_mean  ci_low  ci_high       d  p_raw  n
+  hd95  M0_vs_M1_Omission         0.3     -0.1198     0.3245       True            0.4443  0.3226   0.6250  0.6398    0.0 85
+  hd95 M0_vs_M2_Drift_mu0         0.3     -0.0781     0.3920       True            0.4702  0.3472   0.6541  0.6767    0.0 85
+   nsd  M0_vs_M1_Omission         0.3      0.0066    -0.0054       True           -0.0119 -0.0128  -0.0112 -3.1453    0.0 85
+   nsd M0_vs_M2_Drift_mu0         0.3      0.0067    -0.0054       True           -0.0121 -0.0130  -0.0113 -2.8714    0.0 85
+[draw 4042] 10:11:04
+omissions emboîtées : 85/85 cas
+metric               pair  p_omission  delta_star  delta_ref  sign_flip  interaction_mean  ci_low  ci_high       d  p_raw  n
+  hd95  M0_vs_M1_Omission         0.3     -0.1198     0.3160       True            0.4358  0.3177   0.5976  0.6755    0.0 85
+  hd95 M0_vs_M2_Drift_mu0         0.3     -0.0781     0.3731       True            0.4513  0.3324   0.6144  0.6999    0.0 85
+   nsd  M0_vs_M1_Omission         0.3      0.0066    -0.0051       True           -0.0116 -0.0125  -0.0108 -2.8264    0.0 85
+   nsd M0_vs_M2_Drift_mu0         0.3      0.0067    -0.0048       True           -0.0115 -0.0125  -0.0107 -2.8110    0.0 85
+[draw 5042] 10:20:38
+omissions emboîtées : 85/85 cas
+metric               pair  p_omission  delta_star  delta_ref  sign_flip  interaction_mean  ci_low  ci_high       d  p_raw  n
+  hd95  M0_vs_M1_Omission         0.3     -0.1198     0.3356       True            0.4554  0.3365   0.6296  0.6684    0.0 85
+  hd95 M0_vs_M2_Drift_mu0         0.3     -0.0781     0.3993       True            0.4774  0.3545   0.6616  0.6726    0.0 85
+   nsd  M0_vs_M1_Omission         0.3      0.0066    -0.0051       True           -0.0117 -0.0126  -0.0109 -2.9332    0.0 85
+   nsd M0_vs_M2_Drift_mu0         0.3      0.0067    -0.0051       True           -0.0119 -0.0129  -0.0110 -2.6701    0.0 85
+[draw 6042] 10:30:16
+omissions emboîtées : 85/85 cas
+metric               pair  p_omission  delta_star  delta_ref  sign_flip  interaction_mean  ci_low  ci_high       d  p_raw  n
+  hd95  M0_vs_M1_Omission         0.3     -0.1198     0.2859       True            0.4056  0.2886   0.5646  0.6290    0.0 85
+  hd95 M0_vs_M2_Drift_mu0         0.3     -0.0781     0.3482       True            0.4264  0.3137   0.5726  0.7002    0.0 85
+   nsd  M0_vs_M1_Omission         0.3      0.0066    -0.0050       True           -0.0116 -0.0125  -0.0108 -2.8934    0.0 85
+   nsd M0_vs_M2_Drift_mu0         0.3      0.0067    -0.0049       True           -0.0116 -0.0125  -0.0108 -2.8120    0.0 85
+[draw 7042] 10:40:15
+omissions emboîtées : 85/85 cas
+metric               pair  p_omission  delta_star  delta_ref  sign_flip  interaction_mean  ci_low  ci_high       d  p_raw  n
+  hd95  M0_vs_M1_Omission         0.3     -0.1198     0.3526       True            0.4723  0.3482   0.6697  0.6497    0.0 85
+  hd95 M0_vs_M2_Drift_mu0         0.3     -0.0781     0.4111       True            0.4892  0.3637   0.6900  0.6623    0.0 85
+   nsd  M0_vs_M1_Omission         0.3      0.0066    -0.0053       True           -0.0119 -0.0128  -0.0110 -2.7463    0.0 85
+   nsd M0_vs_M2_Drift_mu0         0.3      0.0067    -0.0055       True           -0.0122 -0.0133  -0.0112 -2.4851    0.0 85
+[draw 8042] 10:50:01
+omissions emboîtées : 85/85 cas
+metric               pair  p_omission  delta_star  delta_ref  sign_flip  interaction_mean  ci_low  ci_high       d  p_raw  n
+  hd95  M0_vs_M1_Omission         0.3     -0.1198     0.3263       True            0.4461  0.3328   0.6002  0.7187    0.0 85
+  hd95 M0_vs_M2_Drift_mu0         0.3     -0.0781     0.3740       True            0.4521  0.3397   0.6029  0.7455    0.0 85
+   nsd  M0_vs_M1_Omission         0.3      0.0066    -0.0056       True           -0.0121 -0.0130  -0.0113 -2.9751    0.0 85
+   nsd M0_vs_M2_Drift_mu0         0.3      0.0067    -0.0054       True           -0.0121 -0.0131  -0.0112 -2.7341    0.0 85
+[draw 9042] 11:00:06
+omissions emboîtées : 85/85 cas
+metric               pair  p_omission  delta_star  delta_ref  sign_flip  interaction_mean  ci_low  ci_high       d  p_raw  n
+  hd95  M0_vs_M1_Omission         0.3     -0.1198     0.2632       True            0.3830  0.2700   0.5436  0.6088    0.0 85
+  hd95 M0_vs_M2_Drift_mu0         0.3     -0.0781     0.3355       True            0.4137  0.2976   0.5786  0.6433    0.0 85
+   nsd  M0_vs_M1_Omission         0.3      0.0066    -0.0045       True           -0.0111 -0.0118  -0.0103 -3.1271    0.0 85
+   nsd M0_vs_M2_Drift_mu0         0.3      0.0067    -0.0046       True           -0.0113 -0.0122  -0.0105 -2.8696    0.0 85
+[draw 10042] 11:10:11
+omissions emboîtées : 85/85 cas
+metric               pair  p_omission  delta_star  delta_ref  sign_flip  interaction_mean  ci_low  ci_high       d  p_raw  n
+  hd95  M0_vs_M1_Omission         0.3     -0.1198     0.2713       True            0.3910  0.2883   0.5336  0.6844    0.0 85
+  hd95 M0_vs_M2_Drift_mu0         0.3     -0.0781     0.3342       True            0.4123  0.3112   0.5454  0.7458    0.0 85
+   nsd  M0_vs_M1_Omission         0.3      0.0066    -0.0053       True           -0.0118 -0.0127  -0.0110 -3.0121    0.0 85
+   nsd M0_vs_M2_Drift_mu0         0.3      0.0067    -0.0055       True           -0.0122 -0.0132  -0.0113 -2.6553    0.0 85
+metric               pair  n_draws  interaction_mean_over_draws  interaction_sd_over_draws  interaction_min  interaction_max  delta_ref_mean  delta_ref_sd  n_draws_sign_flip   d_min   d_max  p_raw_max
+  hd95  M0_vs_M1_Omission       11                       0.4230                     0.0294           0.3830           0.4723          0.3033        0.0294                 11  0.6088  0.7206        0.0
+  hd95 M0_vs_M2_Drift_mu0       11                       0.4429                     0.0277           0.4123           0.4892          0.3648        0.0277                 11  0.6364  0.7458        0.0
+   nsd  M0_vs_M1_Omission       11                      -0.0116                     0.0003          -0.0121          -0.0111         -0.0051        0.0003                 11 -3.1453 -2.7463        0.0
+   nsd M0_vs_M2_Drift_mu0       11                      -0.0118                     0.0003          -0.0122          -0.0113         -0.0050        0.0003                 11 -2.8714 -2.4851        0.0

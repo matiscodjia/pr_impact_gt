@@ -50,18 +50,45 @@ try:
 except Exception:  # pragma: no cover
     compute_cldice = compute_nsd = None
 
-# Palette
-_C_KEPT = (0.62, 0.62, 0.66)   # gris
-_C_REMOVED = (0.85, 0.12, 0.14)  # rouge
-_C_ADDED = (0.12, 0.40, 0.85)    # bleu
-_BG = "#0e1117"
+# ── Palette & thème ──────────────────────────────────────────────────────────
+# Couleurs sémantiques (constantes : lisibles sur fond clair comme foncé).
+_C_REMOVED = (0.85, 0.12, 0.14)  # rouge — voxels retirés (amputation)
+_C_ADDED = (0.12, 0.40, 0.85)    # bleu  — voxels ajoutés (sur-segmentation)
+
+# Variables de style pilotées par le thème (réassignées par set_theme()).
+# Valeurs par défaut = thème SOMBRE (rendu écran).
+_BG = "#0e1117"                  # fond figure/axes
+_C_KEPT = (0.62, 0.62, 0.66)     # gris « conservé »
+_TEXT = "white"                  # titres, labels principaux, légendes
+_SUBTEXT = "#d0d0d0"             # sous-titres de panneau
+_XLABEL = "#bfc7d5"              # légendes d'axe (accord inter-annotateur)
+_SPINE = "#333"                  # contour des axes
+_BOX_FC = "#1c1f26"              # fond des encarts d'annotation
+_BOX_EC = "#444"                 # bord des encarts
+_EMPTY = 0.0                     # remplissage du vide des overlays RGB (0=noir, 1=blanc)
+_KEPT_ALPHA = 0.10               # opacité du mesh 3D « conservé »
+
+# Surcharges du thème CLAIR (page d'article) : gris plus foncé pour rester lisible
+# sur blanc, textes sombres, mesh translucide légèrement plus opaque.
+_THEME_LIGHT = dict(
+    _BG="white", _C_KEPT=(0.50, 0.50, 0.54), _TEXT="black", _SUBTEXT="#333",
+    _XLABEL="#444", _SPINE="#bbb", _BOX_FC="#f2f2f2", _BOX_EC="#bbb",
+    _EMPTY=1.0, _KEPT_ALPHA=0.16,
+)
+
+
+def set_theme(light: bool) -> None:
+    """Bascule le thème de rendu : sombre (défaut) ↔ clair (page blanche).
+    Réassigne les globales de style consommées par toutes les fonctions de rendu."""
+    if light:
+        globals().update(_THEME_LIGHT)
 
 _FAMILY_LABEL = {
-    "distal_omission": "distal_omission\n(omission branches fines)",
-    "boundary_drift": "boundary_drift\n(dérive + jitter de surface)",
-    "boundary_jitter": "boundary_jitter\n(jitter de surface ±r)",
-    "distal_truncation": "distal_truncation\n(troncature terminale)",
-    "homogeneous_morpho": "homogeneous_morpho\n(érosion uniforme — CONTRÔLE)",
+    "distal_omission": "distal_omission\n(fine-branch omission)",
+    "boundary_drift": "boundary_drift\n(drift + surface jitter)",
+    "boundary_jitter": "boundary_jitter\n(surface jitter ±r)",
+    "distal_truncation": "distal_truncation\n(terminal truncation)",
+    "homogeneous_morpho": "homogeneous_morpho\n(uniform erosion -- CONTROL)",
 }
 
 
@@ -117,16 +144,18 @@ def _best_slice(change: np.ndarray, axis: int = 2) -> int:
 def _overlay_rgb(kept_s, removed_s, added_s) -> np.ndarray:
     """Construit une image RGB (H, W, 3) à partir des masques de coupe booléens."""
     h, w = kept_s.shape
-    rgb = np.zeros((h, w, 3), np.float32)
+    rgb = np.full((h, w, 3), _EMPTY, np.float32)
     rgb[kept_s] = _C_KEPT
     rgb[removed_s] = _C_REMOVED
     rgb[added_s] = _C_ADDED
     return rgb
 
 
-def _gray_rgb(mask_s, color=_C_KEPT) -> np.ndarray:
+def _gray_rgb(mask_s, color=None) -> np.ndarray:
+    if color is None:
+        color = _C_KEPT
     h, w = mask_s.shape
-    rgb = np.zeros((h, w, 3), np.float32)
+    rgb = np.full((h, w, 3), _EMPTY, np.float32)
     rgb[mask_s] = color
     return rgb
 
@@ -156,8 +185,8 @@ def render_2d(original, spacing, families, r, p, seed, out_path, case_id, dpi=22
 
         panels = [
             ("Original (GT*)", _gray_rgb(o_s)),
-            (f"Dégradé (GT⁻)  r={r} p={p}", _gray_rgb(d_s)),
-            ("Diff  •  rouge=retiré  bleu=ajouté", _overlay_rgb(kept_s, removed_s, added_s)),
+            (f"Degraded (GT⁻)  r={r} p={p}", _gray_rgb(d_s)),
+            ("Diff  •  red=removed  blue=added", _overlay_rgb(kept_s, removed_s, added_s)),
         ]
         for col, (title, rgb) in enumerate(panels):
             ax = axes[row, col]
@@ -166,30 +195,30 @@ def render_2d(original, spacing, families, r, p, seed, out_path, case_id, dpi=22
             ax.set_facecolor(_BG)
             ax.set_xticks([]); ax.set_yticks([])
             for sp in ax.spines.values():
-                sp.set_color("#333")
+                sp.set_color(_SPINE)
             if col == 0:
-                ax.set_ylabel(_FAMILY_LABEL.get(family, family), color="white",
+                ax.set_ylabel(_FAMILY_LABEL.get(family, family), color=_TEXT,
                               fontsize=12, fontweight="bold", labelpad=12)
-            ax.set_title(title, color="#d0d0d0", fontsize=11, pad=8)
+            ax.set_title(title, color=_SUBTEXT, fontsize=11, pad=8)
 
         # Annotation quantitative sur le panneau diff
         axes[row, 2].text(
             0.02, 0.02,
             f"clDice(GT⁻,GT*)={cl:.3f}\n−{n_rem} vx ({frac_rem:.1f}%)   +{n_add} vx",
-            transform=axes[row, 2].transAxes, color="white", fontsize=9,
+            transform=axes[row, 2].transAxes, color=_TEXT, fontsize=9,
             va="bottom", ha="left",
-            bbox=dict(boxstyle="round,pad=0.3", fc="#1c1f26", ec="#444", alpha=0.85),
+            bbox=dict(boxstyle="round,pad=0.3", fc=_BOX_FC, ec=_BOX_EC, alpha=0.85),
         )
 
     legend = [
-        Patch(facecolor=_C_REMOVED, label="Retiré (amputation)"),
-        Patch(facecolor=_C_ADDED, label="Ajouté (dilatation locale)"),
-        Patch(facecolor=_C_KEPT, label="Conservé"),
+        Patch(facecolor=_C_REMOVED, label="Removed (amputation)"),
+        Patch(facecolor=_C_ADDED, label="Added (local dilation)"),
+        Patch(facecolor=_C_KEPT, label="Kept"),
     ]
     fig.legend(handles=legend, loc="upper center", ncol=3, frameon=False,
-               labelcolor="white", fontsize=11, bbox_to_anchor=(0.5, 1.0))
-    fig.suptitle(f"Effet des dégradations — {case_id}  (coupe axiale, slice de change max)",
-                 color="white", fontsize=15, fontweight="bold", y=1.015)
+               labelcolor=_TEXT, fontsize=11, bbox_to_anchor=(0.5, 1.0))
+    fig.suptitle(f"Degradation effects -- {case_id}  (axial slice, max-change slice)",
+                 color=_TEXT, fontsize=15, fontweight="bold", y=1.015)
     fig.tight_layout(rect=(0, 0, 1, 0.985))
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight", facecolor=_BG)
     plt.close(fig)
@@ -237,7 +266,7 @@ def render_3d(original, spacing, families, r, p, seed, out_path, case_id, ds_fac
         ax = fig.add_subplot(1, ncols, i + 1, projection="3d")
         ax.set_facecolor(_BG)
         # Structure conservée : translucide, en fond
-        _add_mesh(ax, kept_c, sp, _C_KEPT, alpha=0.10)
+        _add_mesh(ax, kept_c, sp, _C_KEPT, alpha=_KEPT_ALPHA)
         _add_mesh(ax, removed_c, sp, _C_REMOVED, alpha=0.55)
         _add_mesh(ax, added_c, sp, _C_ADDED, alpha=0.65)
 
@@ -248,17 +277,17 @@ def render_3d(original, spacing, families, r, p, seed, out_path, case_id, ds_fac
         ax.set_axis_off()
         n_rem, n_add = int(removed.sum()), int(added.sum())
         ax.set_title(f"{family}\n−{n_rem} vx   +{n_add} vx",
-                     color="white", fontsize=12, fontweight="bold", pad=2)
+                     color=_TEXT, fontsize=12, fontweight="bold", pad=2)
 
     legend = [
-        Patch(facecolor=_C_REMOVED, label="Retiré"),
-        Patch(facecolor=_C_ADDED, label="Ajouté"),
-        Patch(facecolor=_C_KEPT, label="Conservé (translucide)"),
+        Patch(facecolor=_C_REMOVED, label="Removed"),
+        Patch(facecolor=_C_ADDED, label="Added"),
+        Patch(facecolor=_C_KEPT, label="Kept (translucent)"),
     ]
     fig.legend(handles=legend, loc="lower center", ncol=3, frameon=False,
-               labelcolor="white", fontsize=12)
-    fig.suptitle(f"Dégradations en 3D — {case_id}  (ds×{ds_factor})",
-                 color="white", fontsize=15, fontweight="bold", y=0.99)
+               labelcolor=_TEXT, fontsize=12)
+    fig.suptitle(f"Degradations in 3D — {case_id}  (ds×{ds_factor})",
+                 color=_TEXT, fontsize=15, fontweight="bold", y=0.99)
     fig.tight_layout(rect=(0, 0.04, 1, 0.96))
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight", facecolor=_BG)
     plt.close(fig)
@@ -267,15 +296,15 @@ def render_3d(original, spacing, families, r, p, seed, out_path, case_id, ds_fac
 
 # ── Balayage du biais μ (boundary_drift) ─────────────────────────────────────
 # Montre le phénomène central : μ=0 → jitter non biaisé (se compense, augmentation) ;
-# μ≠0 → biais systématique apprenable (sous- ou sur-segmentation). L'accord
+# μ≠0 → systematic bias apprenable (sous- ou sur-segmentation). L'accord
 # inter-annotateur (clDice + NSD@0.5mm) est annoté pour prouver le réalisme.
 
 def _drift_regime(mu: float) -> str:
     if mu < 0:
-        return "sous-segmentation (biais −)"
+        return "under-segmentation (bias -)"
     if mu > 0:
-        return "sur-segmentation (biais +)"
-    return "jitter pur (biais nul)"
+        return "over-segmentation (bias +)"
+    return "pure jitter (zero bias)"
 
 
 def render_mu_sweep_2d(original, spacing, r, p, mus, seed, out_path, case_id, dpi=220):
@@ -297,12 +326,12 @@ def render_mu_sweep_2d(original, spacing, r, p, mus, seed, out_path, case_id, dp
                   origin="lower", interpolation="nearest", aspect=aspect)
         ax.set_facecolor(_BG); ax.set_xticks([]); ax.set_yticks([])
         for spine in ax.spines.values():
-            spine.set_color("#333")
+            spine.set_color(_SPINE)
         ax.set_title(f"μ = {mu:+.1f}\n{_drift_regime(mu)}",
-                     color="white", fontsize=13, fontweight="bold", pad=8)
+                     color=_TEXT, fontsize=13, fontweight="bold", pad=8)
         cldice, nsd = _agreement(degraded[j], original, spacing)
-        ax.set_xlabel(f"accord inter-annotateur\nclDice {cldice:.3f}  ·  NSD@0.5 {nsd:.3f}",
-                      color="#bfc7d5", fontsize=10, labelpad=10)
+        ax.set_xlabel(f"inter-observer agreement\nclDice {cldice:.3f}  ·  NSD@0.5 {nsd:.3f}",
+                      color=_XLABEL, fontsize=10, labelpad=10)
 
     _drift_legend_and_save(fig, out_path, case_id, r, dpi, dim="2D")
     print(f"  μ-sweep 2D → {out_path}  ({dpi} dpi)")
@@ -321,14 +350,14 @@ def render_mu_sweep_3d(original, spacing, r, p, mus, seed, out_path, case_id, ds
 
         ax = fig.add_subplot(1, len(mus), j + 1, projection="3d")
         ax.set_facecolor(_BG)
-        for vol, color, alpha in zip(layers, (_C_KEPT, _C_REMOVED, _C_ADDED), (0.08, 0.55, 0.65)):
+        for vol, color, alpha in zip(layers, (_C_KEPT, _C_REMOVED, _C_ADDED), (_KEPT_ALPHA, 0.55, 0.65)):
             _add_mesh(ax, vol, sp, color, alpha)
         ax.set_box_aspect(np.array(layers[0].shape) * np.array(sp))
         ax.view_init(elev=16, azim=-62)
         ax.set_axis_off()
         cldice, nsd = _agreement(degraded, original, spacing)
         ax.set_title(f"μ = {mu:+.1f}  ·  {_drift_regime(mu)}\nclDice {cldice:.3f} · NSD@0.5 {nsd:.3f}",
-                     color="white", fontsize=12, fontweight="bold", pad=2)
+                     color=_TEXT, fontsize=12, fontweight="bold", pad=2)
 
     _drift_legend_and_save(fig, out_path, case_id, r, dpi, dim=f"3D (ds×{ds_factor})")
     print(f"  μ-sweep 3D → {out_path}  ({dpi} dpi)")
@@ -336,17 +365,17 @@ def render_mu_sweep_3d(original, spacing, r, p, mus, seed, out_path, case_id, ds
 
 def _drift_legend_and_save(fig, out_path, case_id, r, dpi, dim):
     legend = [
-        Patch(facecolor=_C_REMOVED, label="Retiré (bord reculé)"),
-        Patch(facecolor=_C_ADDED, label="Ajouté (bord avancé)"),
-        Patch(facecolor=_C_KEPT, label="Conservé"),
+        Patch(facecolor=_C_REMOVED, label="Removed (boundary receded)"),
+        Patch(facecolor=_C_ADDED, label="Added (boundary advanced)"),
+        Patch(facecolor=_C_KEPT, label="Kept"),
     ]
     fig.legend(handles=legend, loc="lower center", ncol=3, frameon=False,
-               labelcolor="white", fontsize=12)
+               labelcolor=_TEXT, fontsize=12)
     fig.suptitle(
-        f"boundary_drift — balayage du biais μ — {case_id}  [{dim}, r={r}]\n"
-        "μ=0 non biaisé (se compense → augmentation, Q2)   ·   μ≠0 biais systématique "
-        "apprenable (Q3)   ·   accord inter-annotateur conservé",
-        color="white", fontsize=14, fontweight="bold", y=0.99)
+        f"boundary_drift — bias mu sweep — {case_id}  [{dim}, r={r}]\n"
+        "mu=0 unbiased (cancels to augmentation, Q2)   ·   μ≠0 systematic bias "
+        "learnable (Q3)   .   inter-observer agreement preserved",
+        color=_TEXT, fontsize=14, fontweight="bold", y=0.99)
     fig.tight_layout(rect=(0, 0.05, 1, 0.93))
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight", facecolor=_BG)
     plt.close(fig)
@@ -385,12 +414,15 @@ def main():
     ap.add_argument("--ds-factor", type=int, default=2, help="Downsample 3D (max-pool ; 1 = pleine résolution)")
     ap.add_argument("--dpi", type=int, default=220, help="Résolution des figures (points/pouce)")
     ap.add_argument("--no-3d", action="store_true", help="2D seulement (rapide)")
+    ap.add_argument("--light", action="store_true",
+                    help="Thème clair (fond blanc) — pour intégration dans un PDF/article")
     ap.add_argument("--mu-sweep", nargs="+", type=float, metavar="MU",
                     help="Génère le schéma de balayage du biais μ pour boundary_drift "
                          "(ex. --mu-sweep -1 -0.5 0 0.5 1). p=1.0 conseillé.")
     ap.add_argument("--output-dir", default="result/figures/degradations")
     args = ap.parse_args()
 
+    set_theme(args.light)
     os.makedirs(args.output_dir, exist_ok=True)
     inputs = _resolve_inputs(args)
     if not inputs:

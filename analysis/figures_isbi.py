@@ -8,8 +8,9 @@ couleur).
 
 Panel (a) -- the HD95 reversal: per-case paired M0 vs M1 under `star` and `omission`,
 mean +/- bootstrap CI overlaid on faint per-case connecting lines, showing the crossing.
-Panel (b) -- the mu sweep (boundary_drift, results/noise_calibration.csv), cleaned
-version of Table 5.1: 4 small multiples (clDice, NSD@0.5, HD95, Betti0) vs mu, showing
+Panel (b) -- the mu sweep (boundary_drift r=1 p=0.5, GT- vs GT* only, no model), mean over
+the 85 cases (grid rows of results/calibration_85_summary.csv, written by
+recalibrate_85.py): 4 small multiples (clDice, NSD@0.5, HD95, Betti0) vs mu, showing
 the metric dissociation (unsigned/symmetric NSD vs. signed/monotone clDice&Betti0 vs.
 saturating HD95).
 
@@ -95,9 +96,9 @@ def panel_a(ax, p: pd.DataFrame, seed: int, n_boot: int = 2000) -> None:
 
 def panel_b(fig, gridspec_slot, calib_csv: str) -> None:
     df = pd.read_csv(calib_csv)
-    df = df[df["family"] == "boundary_drift"].sort_values("mu")
-    metrics = [("clDice", "clDice ($\\uparrow$)"), ("NSD@0.5", "NSD@0.5 ($\\uparrow$)"),
-               ("HD95", "HD95 mm ($\\downarrow$)"), ("Betti0", "Betti$_0$ ($\\downarrow$)")]
+    df = df[(df["source"] == "grid") & (df["family"] == "boundary_drift")].sort_values("mu")
+    metrics = [("clDice_mean", "clDice ($\\uparrow$)"), ("NSD@0.5_mean", "NSD@0.5 ($\\uparrow$)"),
+               ("HD95_mean", "HD95 mm ($\\downarrow$)"), ("Betti0_mean", "Betti$_0$ ($\\downarrow$)")]
 
     # 2x2 (pas 1x4) : à largeur colonne IEEE fixe (~3.4in), 4 sous-graphes côte à côte
     # ne laissent pas assez de place pour des ticks >=8pt lisibles. Ligne 0 réservée au
@@ -116,7 +117,7 @@ def panel_b(fig, gridspec_slot, calib_csv: str) -> None:
         ax.spines[["top", "right"]].set_visible(False)
 
     bbox = gridspec_slot.get_position(fig)
-    fig.text(0.03, bbox.y1 - 0.008, "(b) The $\\mu$-sweep dissociates the instruments",
+    fig.text(0.03, bbox.y1 - 0.008, "(b) GT$^-$ vs. GT$^*$, no model: the $\\mu$-sweep",
               fontweight="bold", fontsize=MIN_PT, va="top")
 
 
@@ -128,9 +129,9 @@ def main():
     args = ap.parse_args()
 
     p = load_pooled(args.results_dir)
-    calib_csv = os.path.join(args.results_dir, "noise_calibration.csv")
+    calib_csv = os.path.join(args.results_dir, "calibration_85_summary.csv")
     if not os.path.exists(calib_csv):
-        raise SystemExit(f"[FATAL] {calib_csv} absent -- lancer calibrate_noise.py d'abord.")
+        raise SystemExit(f"[FATAL] {calib_csv} absent -- lancer analysis/recalibrate_85.py d'abord.")
 
     fig = plt.figure(figsize=(3.4, 5.7))
     gs = fig.add_gridspec(2, 1, height_ratios=[1.0, 1.15], hspace=0.18,

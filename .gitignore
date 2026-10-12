@@ -8,6 +8,7 @@ wheels/
 data
 nnUNet_data
 .DS_Store
+external/
 # Virtual environments
 .venv
 .claude
